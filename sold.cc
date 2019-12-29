@@ -4,12 +4,15 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -17,6 +20,24 @@
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
 #define Elf_Dyn Elf64_Dyn
+#define Elf_Addr Elf64_Addr
+
+namespace {
+
+std::vector<std::string> SplitString(const std::string& str, const std::string& sep) {
+    std::vector<std::string> ret;
+    if (str.empty()) return ret;
+    size_t index = 0;
+    while (true) {
+        size_t next = str.find(sep, index);
+        ret.push_back(str.substr(index, next - index));
+        if (next == std::string::npos) break;
+        index = next + 1;
+    }
+    return ret;
+}
+
+}
 
 class ELFBinary {
 public:
@@ -45,7 +66,14 @@ public:
         return true;
     }
 
+    const std::string& filename() const { return filename_; }
+
     const Elf_Ehdr* ehdr() const { return ehdr_; }
+
+    const std::vector<std::string>& neededs() const { return neededs_; }
+    const std::string& soname() const { return soname_; }
+    const std::string& runpath() const { return runpath_; }
+    const std::string& rpath() const { return rpath_; }
 
 private:
     void ParsePhdrs() {
@@ -53,7 +81,9 @@ private:
             Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(
                 head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
             phdrs_.push_back(phdr);
+        }
 
+        for (Elf_Phdr* phdr : phdrs_) {
             if (phdr->p_type == PT_DYNAMIC) {
                 ParseDynamic(phdr->p_offset, phdr->p_filesz);
             }
@@ -73,7 +103,7 @@ private:
 
         for (Elf_Dyn* dyn : dyns) {
             if (dyn->d_tag == DT_STRTAB) {
-                strtab_ = head_ + dyn->d_un.d_val;
+                strtab_ = head_ + OffsetFromAddr(dyn->d_un.d_ptr);
             }
         }
         assert(strtab_);
@@ -87,11 +117,21 @@ private:
             } else if (dyn->d_tag == DT_RUNPATH) {
                 runpath_ = strtab_ + dyn->d_un.d_val;
             } else if (dyn->d_tag == DT_RPATH) {
-                fprintf(stderr,
-                        "RPATH is deprecated and may be handled wrongly\n");
                 rpath_ = strtab_ + dyn->d_un.d_val;
             }
         }
+    }
+
+    Elf_Addr OffsetFromAddr(Elf_Addr addr) {
+        for (Elf_Phdr* phdr : phdrs_) {
+            if (phdr->p_type == PT_LOAD &&
+                phdr->p_vaddr <= addr && addr < phdr->p_vaddr + phdr->p_memsz) {
+                return addr - phdr->p_vaddr + phdr->p_offset;
+            }
+        }
+        fprintf(stderr, "Address %llx cannot be resolved\n",
+                static_cast<long long>(addr));
+        abort();
     }
 
     const std::string filename_;
@@ -136,13 +176,73 @@ class Sold {
 public:
     Sold(const std::string& elf_filename) {
         main_binary_ = ReadELF(elf_filename);
+        InitLibraryPaths();
+        ResolveLibraryPaths(main_binary_.get());
     }
 
     void Link(const std::string& out_filename) {
     }
 
 private:
+    void InitLibraryPaths() {
+        const std::string& runpath = main_binary_->runpath();
+        const std::string& rpath = main_binary_->rpath();
+        if (runpath.empty() && !rpath.empty()) {
+            library_paths_.push_back(rpath);
+        }
+        if (const char* paths = getenv("LD_LIBRARY_PATH")) {
+            for (const std::string& path : SplitString(paths, ":")) {
+                library_paths_.push_back(path);
+            }
+        }
+        if (!runpath.empty()) {
+            library_paths_.push_back(runpath);
+        }
+
+        // TODO(hamaji): From ld.so.conf. Make this customizable.
+        library_paths_.push_back("/usr/local/lib");
+        library_paths_.push_back("/usr/local/lib/x86_64-linux-gnu");
+        library_paths_.push_back("/lib/x86_64-linux-gnu");
+        library_paths_.push_back("/usr/lib/x86_64-linux-gnu");
+    }
+
+    void ResolveLibraryPaths(const ELFBinary* binary) {
+        for (const std::string& needed : binary->neededs()) {
+            auto found = libraries.find(needed);
+            if (found != libraries.end()) {
+                continue;
+            }
+
+            std::unique_ptr<ELFBinary> library;
+            for (const std::string& path : library_paths_) {
+                const std::string& filename = path + '/' + needed;
+                if (Exists(filename)) {
+                    library = ReadELF(filename);
+                    break;
+                }
+            }
+            if (!library) {
+                fprintf(stderr, "Library %s not found\n", needed.c_str());
+                abort();
+            }
+
+            fprintf(stderr, "Loaded: %s => %s\n",
+                    needed.c_str(), library->filename().c_str());
+
+            auto inserted = libraries.emplace(needed, std::move(library));
+            assert(inserted.second);
+            ResolveLibraryPaths(inserted.first->second.get());
+        }
+    }
+
+    bool Exists(const std::string& filename) {
+        std::ifstream ifs(filename);
+        return static_cast<bool>(ifs);
+    }
+
     std::unique_ptr<ELFBinary> main_binary_;
+    std::vector<std::string> library_paths_;
+    std::map<std::string, std::unique_ptr<ELFBinary>> libraries;
 };
 
 int main(int argc, const char* argv[]) {
