@@ -82,6 +82,14 @@ private:
             if (dyn->d_tag == DT_NEEDED) {
                 const char* needed = strtab_ + dyn->d_un.d_val;
                 neededs_.push_back(needed);
+            } else if (dyn->d_tag == DT_SONAME) {
+                soname_ = strtab_ + dyn->d_un.d_val;
+            } else if (dyn->d_tag == DT_RUNPATH) {
+                runpath_ = strtab_ + dyn->d_un.d_val;
+            } else if (dyn->d_tag == DT_RPATH) {
+                fprintf(stderr,
+                        "RPATH is deprecated and may be handled wrongly\n");
+                rpath_ = strtab_ + dyn->d_un.d_val;
             }
         }
     }
@@ -95,6 +103,9 @@ private:
     std::vector<Elf_Phdr*> phdrs_;
     const char* strtab_{nullptr};
     std::vector<std::string> neededs_;
+    std::string soname_;
+    std::string runpath_;
+    std::string rpath_;
 };
 
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
