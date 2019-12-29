@@ -2,6 +2,7 @@
 #include <elf.h>
 #include <err.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -176,7 +177,8 @@ class Sold {
 public:
     Sold(const std::string& elf_filename) {
         main_binary_ = ReadELF(elf_filename);
-        InitLibraryPaths();
+
+        InitLdLibraryPaths();
         ResolveLibraryPaths(main_binary_.get());
     }
 
@@ -184,29 +186,64 @@ public:
     }
 
 private:
-    void InitLibraryPaths() {
-        const std::string& runpath = main_binary_->runpath();
-        const std::string& rpath = main_binary_->rpath();
-        if (runpath.empty() && !rpath.empty()) {
-            library_paths_.push_back(rpath);
-        }
+    void InitLdLibraryPaths() {
         if (const char* paths = getenv("LD_LIBRARY_PATH")) {
             for (const std::string& path : SplitString(paths, ":")) {
-                library_paths_.push_back(path);
+                ld_library_paths_.push_back(path);
             }
         }
+    }
+
+    std::string ResolveRunPathVariables(const ELFBinary* binary,
+                                        const std::string& runpath) {
+        std::string out = runpath;
+
+        auto replace = [](std::string& s,
+                          const std::string& f,
+                          const std::string& t) {
+            size_t found = s.find(f);
+            while (found != std::string::npos) {
+                s.replace(found, f.size(), t);
+                found = s.find(f);
+            }
+        };
+
+        std::string origin = binary->filename();
+        origin = dirname(&origin[0]);
+        replace(out, "$ORIGIN", origin);
+        replace(out, "${ORIGIN}", origin);
+        if (out.find('$') != std::string::npos) {
+            fprintf(stderr, "Unsupported runpath: %s\n", runpath.c_str());
+            abort();
+        }
+        return out;
+    }
+
+    std::vector<std::string> GetLibraryPaths(const ELFBinary* binary) {
+        std::vector<std::string> library_paths;
+        const std::string& runpath = binary->runpath();
+        const std::string& rpath = binary->rpath();
+        if (runpath.empty() && !rpath.empty()) {
+            library_paths.push_back(ResolveRunPathVariables(binary, rpath));
+        }
+        for (const std::string& path : ld_library_paths_) {
+            library_paths.push_back(path);
+        }
         if (!runpath.empty()) {
-            library_paths_.push_back(runpath);
+            library_paths.push_back(ResolveRunPathVariables(binary, runpath));
         }
 
         // TODO(hamaji): From ld.so.conf. Make this customizable.
-        library_paths_.push_back("/usr/local/lib");
-        library_paths_.push_back("/usr/local/lib/x86_64-linux-gnu");
-        library_paths_.push_back("/lib/x86_64-linux-gnu");
-        library_paths_.push_back("/usr/lib/x86_64-linux-gnu");
+        library_paths.push_back("/usr/local/lib");
+        library_paths.push_back("/usr/local/lib/x86_64-linux-gnu");
+        library_paths.push_back("/lib/x86_64-linux-gnu");
+        library_paths.push_back("/usr/lib/x86_64-linux-gnu");
+        return library_paths;
     }
 
     void ResolveLibraryPaths(const ELFBinary* binary) {
+        std::vector<std::string> library_paths = GetLibraryPaths(binary);
+
         for (const std::string& needed : binary->neededs()) {
             auto found = libraries.find(needed);
             if (found != libraries.end()) {
@@ -214,7 +251,7 @@ private:
             }
 
             std::unique_ptr<ELFBinary> library;
-            for (const std::string& path : library_paths_) {
+            for (const std::string& path : library_paths) {
                 const std::string& filename = path + '/' + needed;
                 if (Exists(filename)) {
                     library = ReadELF(filename);
@@ -241,7 +278,7 @@ private:
     }
 
     std::unique_ptr<ELFBinary> main_binary_;
-    std::vector<std::string> library_paths_;
+    std::vector<std::string> ld_library_paths_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries;
 };
 
