@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <elf.h>
 #include <err.h>
 #include <fcntl.h>
@@ -15,26 +16,24 @@
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
+#define Elf_Dyn Elf64_Dyn
 
 class ELFBinary {
 public:
-    ELFBinary(const std::string& filename,
-              int fd, char* mapped_head, size_t mapped_size)
+    ELFBinary(const std::string& filename, int fd, char* head, size_t size)
       : filename_(filename),
         fd_(fd),
-        mapped_head_(mapped_head),
-        mapped_size_(mapped_size) {
-        Elf_Ehdr* ehdr = reinterpret_cast<Elf_Ehdr*>(mapped_head);
-        if (!ehdr->e_shoff || !ehdr->e_shnum)
-            err(1, "no section header: %s", filename.c_str());
-        if (!ehdr->e_shstrndx)
-            err(1, "no section name: %s", filename.c_str());
+        head_(head),
+        size_(size) {
+        ehdr_ = reinterpret_cast<Elf_Ehdr*>(head);
+
+        ParsePhdrs();
     }
 
-  ~ELFBinary() {
-      munmap(mapped_head_, mapped_size_);
-      close(fd_);
-  }
+    ~ELFBinary() {
+        munmap(head_, size_);
+        close(fd_);
+    }
 
     static bool IsELF(const char* p) {
         if (strncmp(p, ELFMAG, SELFMAG)) {
@@ -46,12 +45,56 @@ public:
         return true;
     }
 
+    const Elf_Ehdr* ehdr() const { return ehdr_; }
+
 private:
+    void ParsePhdrs() {
+        for (int i = 0; i < ehdr_->e_phnum; ++i) {
+            Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(
+                head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
+            phdrs_.push_back(phdr);
+
+            if (phdr->p_type == PT_DYNAMIC) {
+                ParseDynamic(phdr->p_offset, phdr->p_filesz);
+            }
+        }
+        assert(!phdrs_.empty());
+    }
+
+    void ParseDynamic(size_t off, size_t size) {
+        size_t dyn_size = sizeof(Elf_Dyn);
+        assert(size % dyn_size == 0);
+        std::vector<Elf_Dyn*> dyns;
+        for (size_t i = 0; i < size / dyn_size; ++i) {
+            Elf_Dyn* dyn = reinterpret_cast<Elf_Dyn*>(
+                head_ + off + dyn_size * i);
+            dyns.push_back(dyn);
+        }
+
+        for (Elf_Dyn* dyn : dyns) {
+            if (dyn->d_tag == DT_STRTAB) {
+                strtab_ = head_ + dyn->d_un.d_val;
+            }
+        }
+        assert(strtab_);
+
+        for (Elf_Dyn* dyn : dyns) {
+            if (dyn->d_tag == DT_NEEDED) {
+                const char* needed = strtab_ + dyn->d_un.d_val;
+                neededs_.push_back(needed);
+            }
+        }
+    }
+
     const std::string filename_;
     int fd_;
+    char* head_;
     size_t size_;
-    char* mapped_head_;
-    size_t mapped_size_;
+
+    Elf_Ehdr* ehdr_{nullptr};
+    std::vector<Elf_Phdr*> phdrs_;
+    const char* strtab_{nullptr};
+    std::vector<std::string> neededs_;
 };
 
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
