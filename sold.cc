@@ -13,8 +13,10 @@
 #include <unistd.h>
 
 #include <fstream>
+#include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,19 @@ std::vector<std::string> SplitString(const std::string& str, const std::string& 
     }
     return ret;
 }
+
+uintptr_t AlignUp(uintptr_t a) {
+    return (a + 4095) & ~4095;
+}
+
+struct Range {
+    uintptr_t start;
+    uintptr_t end;
+    ptrdiff_t size() const { return end - start; }
+    Range operator+(uintptr_t offset) const {
+        return Range{start + offset, end + offset};
+    }
+};
 
 }
 
@@ -75,6 +90,18 @@ public:
     const std::string& soname() const { return soname_; }
     const std::string& runpath() const { return runpath_; }
     const std::string& rpath() const { return rpath_; }
+
+    Range GetRange() const {
+        Range range{std::numeric_limits<uintptr_t>::max(), std::numeric_limits<uintptr_t>::min()};
+        for (Elf_Phdr* phdr : phdrs_) {
+            if (phdr->p_type != PT_LOAD) {
+                continue;
+            }
+            range.start = std::min(range.start, phdr->p_vaddr);
+            range.end = std::max(range.end, AlignUp(phdr->p_vaddr + phdr->p_memsz));
+        }
+        return range;
+    }
 
 private:
     void ParsePhdrs() {
@@ -183,9 +210,29 @@ public:
     }
 
     void Link(const std::string& out_filename) {
+        DecideOffsets();
     }
 
 private:
+    void DecideOffsets() {
+        offsets_.emplace(main_binary_.get(), 0);
+        Range main_range = main_binary_->GetRange();
+        uintptr_t offset = main_range.end;
+        for (const auto& p : libraries_) {
+            ELFBinary* bin = p.second.get();
+            if (!ShouldLink(bin->soname())) {
+                continue;
+            }
+
+            const Range range = bin->GetRange() + offset;
+            assert(range.start == offset);
+            offsets_.emplace(bin, range.start);
+            fprintf(stderr, "Assigned: %s %08lx-%08lx\n",
+                    bin->soname().c_str(), range.start, range.end);
+            offset = range.end;
+        }
+    }
+
     void InitLdLibraryPaths() {
         if (const char* paths = getenv("LD_LIBRARY_PATH")) {
             for (const std::string& path : SplitString(paths, ":")) {
@@ -245,8 +292,8 @@ private:
         std::vector<std::string> library_paths = GetLibraryPaths(binary);
 
         for (const std::string& needed : binary->neededs()) {
-            auto found = libraries.find(needed);
-            if (found != libraries.end()) {
+            auto found = libraries_.find(needed);
+            if (found != libraries_.end()) {
                 continue;
             }
 
@@ -266,7 +313,7 @@ private:
             fprintf(stderr, "Loaded: %s => %s\n",
                     needed.c_str(), library->filename().c_str());
 
-            auto inserted = libraries.emplace(needed, std::move(library));
+            auto inserted = libraries_.emplace(needed, std::move(library));
             assert(inserted.second);
             ResolveLibraryPaths(inserted.first->second.get());
         }
@@ -277,9 +324,18 @@ private:
         return static_cast<bool>(ifs);
     }
 
+    static bool ShouldLink(const std::string& soname) {
+        // TODO(hamaji): Make this customizable.
+        if (soname.substr(0, 7) == "libc.so" || soname.substr(0, 8) == "ld-linux") {
+            return false;
+        }
+        return true;
+    }
+
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
-    std::map<std::string, std::unique_ptr<ELFBinary>> libraries;
+    std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
+    std::map<ELFBinary*, uintptr_t> offsets_;
 };
 
 int main(int argc, const char* argv[]) {
