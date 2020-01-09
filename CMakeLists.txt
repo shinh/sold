@@ -12,3 +12,5 @@ add_executable(
   sold
   sold.cc
   )
+
+add_subdirectory(tests)
