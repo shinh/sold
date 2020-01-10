@@ -214,6 +214,15 @@ public:
         return head_ + OffsetFromAddr(offset);
     }
 
+    Elf_Phdr* FindPhdr(uint64_t type) {
+        for (Elf_Phdr* phdr : phdrs_) {
+            if (phdr->p_type == type) {
+                return phdr;
+            }
+        }
+        CHECK(false);
+    }
+
 private:
     void ParsePhdrs() {
         for (int i = 0; i < ehdr_->e_phnum; ++i) {
@@ -359,12 +368,13 @@ private:
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
         EmitEhdr(fp);
+        BuildDynamic();
         EmitPhdrs(fp);
         fclose(fp);
     }
 
     size_t CountPhdrs() const {
-        size_t num_phdrs = 2;
+        size_t num_phdrs = 3;
         for (ELFBinary* bin : link_binaries_) {
             for (Elf_Phdr* phdr : bin->phdrs()) {
                 if (phdr->p_type == PT_LOAD) {
@@ -384,18 +394,45 @@ private:
         Write(fp, ehdr_);
     }
 
+    void BuildDynamic() {
+        std::set<ELFBinary*> linked(link_binaries_.begin(), link_binaries_.end());
+        std::set<std::string> neededs;
+        for (const auto& p : libraries_) {
+            ELFBinary* bin = p.second.get();
+            if (!linked.count(bin)) {
+                neededs.insert(bin->soname());
+            }
+        }
+
+        for (const std::string& needed : neededs) {
+            Elf_Dyn dyn;
+            dyn.d_tag = DT_NEEDED;
+            dyn.d_un.d_ptr = AddStr(needed);
+            dynamic_.push_back(dyn);
+        }
+    }
+
     void EmitPhdrs(FILE* fp) {
+        std::vector<Elf_Phdr> phdrs;
+
         size_t seg_start = AlignUp(sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum);
 
-        std::vector<Elf_Phdr> phdrs;
         CHECK(main_binary_->phdrs().size() > 2);
-        CHECK(main_binary_->phdrs()[0]->p_type == PT_PHDR);
-        phdrs.push_back(*main_binary_->phdrs()[0]);
-        CHECK(main_binary_->phdrs()[1]->p_type == PT_INTERP);
-        phdrs.push_back(*main_binary_->phdrs()[1]);
+        phdrs.push_back(*main_binary_->FindPhdr(PT_PHDR));
+        phdrs.push_back(*main_binary_->FindPhdr(PT_INTERP));
         const std::string interp = main_binary_->head() + main_binary_->phdrs()[1]->p_offset;
         LOGF("Interp: %s\n", interp.c_str());
         phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = AddStr(interp);
+
+        {
+            Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
+            // TODO(hamaji): Fill these values.
+            phdr.p_offset = 0;
+            phdr.p_vaddr = 0;
+            phdr.p_paddr = 0;
+            phdr.p_filesz = 0;
+            phdrs.push_back(phdr);
+        }
 
         for (ELFBinary* bin : link_binaries_) {
             const bool is_main = bin == main_binary_.get();
@@ -634,6 +671,7 @@ private:
     std::vector<Elf_Rel> rels_;
     std::string strtab_;
     Elf_Ehdr ehdr_;
+    std::vector<Elf_Dyn> dynamic_;
 };
 
 int main(int argc, const char* argv[]) {
