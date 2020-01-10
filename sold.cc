@@ -29,6 +29,8 @@
 #define ELF_ST_BIND(val) ELF64_ST_BIND(val)
 #define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
 #define Elf_Rel Elf64_Rela
+#define ELF_R_SYM(val) ELF64_R_SYM(val)
+#define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 
 #define CHECK(r) do { if (!(r)) assert(r); } while (0)
 
@@ -139,6 +141,8 @@ public:
     const std::string& soname() const { return soname_; }
     const std::string& runpath() const { return runpath_; }
     const std::string& rpath() const { return rpath_; }
+
+    const Elf_Sym* symtab() const { return symtab_; }
     const Elf_Rel* rel() const { return rel_; }
     size_t num_rels() const { return num_rels_; }
 
@@ -157,6 +161,7 @@ public:
     }
 
     void ReadDynSymtab() {
+        CHECK(symtab_);
         // TODO(hamaji): Support DT_HASH.
         CHECK(gnu_hash_);
         LOGF("Read dynsymtab of %s\n", name().c_str());
@@ -197,6 +202,10 @@ public:
         }
     }
 
+    char* GetPtr(uintptr_t offset) {
+        return head_ + OffsetFromAddr(offset);
+    }
+
 private:
     void ParsePhdrs() {
         for (int i = 0; i < ehdr_->e_phnum; ++i) {
@@ -224,7 +233,7 @@ private:
         }
 
         for (Elf_Dyn* dyn : dyns) {
-            auto get_ptr = [&]() { return head_ + OffsetFromAddr(dyn->d_un.d_ptr); };
+            auto get_ptr = [this, dyn]() { return GetPtr(dyn->d_un.d_ptr); };
             if (dyn->d_tag == DT_STRTAB) {
                 strtab_ = get_ptr();
             } else if (dyn->d_tag == DT_SYMTAB) {
@@ -278,12 +287,15 @@ private:
     std::vector<Elf_Phdr*> phdrs_;
     const char* strtab_{nullptr};
     Elf_Sym* symtab_{nullptr};
+
     std::vector<std::string> neededs_;
     std::string soname_;
     std::string runpath_;
     std::string rpath_;
+
     Elf_Rel* rel_{nullptr};
     size_t num_rels_{0};
+
     Elf_GnuHash* gnu_hash_{nullptr};
 
     std::string name_;
@@ -364,7 +376,41 @@ private:
     }
 
     void RelocateBinary(ELFBinary* bin) {
+        CHECK(bin->symtab());
         CHECK(bin->rel());
+        uintptr_t offset = offsets_[bin];
+        for (size_t i = 0; i < bin->num_rels(); ++i) {
+            const Elf_Rel* rel = &bin->rel()[i];
+            // TODO(hamaji): Support non-x86-64 architectures.
+            RelocateSymbol_x86_64(bin, rel, offset);
+        }
+    }
+
+    void RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
+        const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
+        int type = ELF_R_TYPE(rel->r_info);
+        const uintptr_t addend = rel->r_addend;
+        void* target = bin->GetPtr(rel->r_offset);
+        Elf_Rel newrel = *rel;
+        newrel.r_offset += offset;
+
+        switch (type) {
+        case R_X86_64_RELATIVE: {
+            *reinterpret_cast<uintptr_t*>(target) += offset;
+            break;
+        }
+
+        case R_X86_64_GLOB_DAT: {
+            CHECK(false);
+            break;
+        }
+
+        default:
+            LOGF("Unknown relocation type: %d\n", type);
+            CHECK(false);
+        }
+
+        rels_.push_back(newrel);
     }
 
     void InitLdLibraryPaths() {
@@ -490,6 +536,7 @@ private:
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
     std::map<std::string, Elf_Sym*> symtab_;
+    std::vector<Elf_Rel> rels_;
 };
 
 int main(int argc, const char* argv[]) {
