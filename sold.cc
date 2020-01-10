@@ -315,6 +315,7 @@ public:
 
 private:
     void DecideOffsets() {
+        link_binaries_.push_back(main_binary_.get());
         offsets_.emplace(main_binary_.get(), 0);
         Range main_range = main_binary_->GetRange();
         uintptr_t offset = main_range.end;
@@ -326,6 +327,7 @@ private:
 
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
+            link_binaries_.push_back(bin);
             offsets_.emplace(bin, range.start);
             LOGF("Assigned: %s %08lx-%08lx\n",
                  bin->soname().c_str(), range.start, range.end);
@@ -334,12 +336,8 @@ private:
     }
 
     void BuildSymtab() {
-        main_binary_->LoadDynSymtab(0, &symtab_);
-        for (const auto& p : libraries_) {
-            ELFBinary* bin = p.second.get();
-            if (ShouldLink(bin->soname())) {
-                bin->LoadDynSymtab(offsets_[bin], &symtab_);
-            }
+        for (ELFBinary* bin : link_binaries_) {
+            bin->LoadDynSymtab(offsets_[bin], &symtab_);
         }
     }
 
@@ -463,6 +461,7 @@ private:
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
+    std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
     std::map<std::string, Elf_Sym*> symtab_;
 };
