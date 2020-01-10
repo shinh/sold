@@ -436,14 +436,16 @@ private:
     void EmitPhdrs(FILE* fp) {
         std::vector<Elf_Phdr> phdrs;
 
+        size_t strtab_start = sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
+
         CHECK(main_binary_->phdrs().size() > 2);
         phdrs.push_back(*main_binary_->FindPhdr(PT_PHDR));
         phdrs.push_back(*main_binary_->FindPhdr(PT_INTERP));
         const std::string interp = main_binary_->head() + main_binary_->phdrs()[1]->p_offset;
         LOGF("Interp: %s\n", interp.c_str());
-        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = AddStr(interp);
+        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = strtab_start + AddStr(interp);
 
-        size_t dyn_start = sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum + strtab_.size();
+        size_t dyn_start = strtab_start + strtab_.size();
         size_t dyn_size = sizeof(Elf_Dyn) * dynamic_.size();
         size_t seg_start = AlignNext(dyn_start + dyn_size);
 
