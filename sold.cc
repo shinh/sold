@@ -28,6 +28,7 @@
 #define Elf_Sym Elf64_Sym
 #define ELF_ST_BIND(val) ELF64_ST_BIND(val)
 #define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
+#define Elf_Rel Elf64_Rela
 
 #define CHECK(r) do { if (!(r)) assert(r); } while (0)
 
@@ -138,6 +139,8 @@ public:
     const std::string& soname() const { return soname_; }
     const std::string& runpath() const { return runpath_; }
     const std::string& rpath() const { return rpath_; }
+    const Elf_Rel* rel() const { return rel_; }
+    size_t num_rels() const { return num_rels_; }
 
     const std::string& name() const { return name_; }
 
@@ -221,12 +224,22 @@ private:
         }
 
         for (Elf_Dyn* dyn : dyns) {
+            auto get_ptr = [&]() { return head_ + OffsetFromAddr(dyn->d_un.d_ptr); };
             if (dyn->d_tag == DT_STRTAB) {
-                strtab_ = head_ + OffsetFromAddr(dyn->d_un.d_ptr);
+                strtab_ = get_ptr();
             } else if (dyn->d_tag == DT_SYMTAB) {
-                symtab_ = reinterpret_cast<Elf_Sym*>(head_ + OffsetFromAddr(dyn->d_un.d_ptr));
+                symtab_ = reinterpret_cast<Elf_Sym*>(get_ptr());
             } else if (dyn->d_tag == DT_GNU_HASH) {
-                gnu_hash_ = reinterpret_cast<Elf_GnuHash*>(head_ + OffsetFromAddr(dyn->d_un.d_ptr));
+                gnu_hash_ = reinterpret_cast<Elf_GnuHash*>(get_ptr());
+            } else if (dyn->d_tag == DT_RELA) {
+                rel_ = reinterpret_cast<Elf_Rel*>(get_ptr());
+            } else if (dyn->d_tag == DT_RELASZ) {
+                num_rels_ = dyn->d_un.d_val / sizeof(Elf_Rel);
+            } else if (dyn->d_tag == DT_RELAENT) {
+                CHECK(sizeof(Elf_Rel) == dyn->d_un.d_val);
+            } else if (dyn->d_tag == DT_REL || dyn->d_tag == DT_RELSZ || dyn->d_tag == DT_RELENT) {
+                // TODO(hamaji): Support 32bit?
+                CHECK(false);
             }
         }
         CHECK(strtab_);
@@ -269,6 +282,8 @@ private:
     std::string soname_;
     std::string runpath_;
     std::string rpath_;
+    Elf_Rel* rel_{nullptr};
+    size_t num_rels_{0};
     Elf_GnuHash* gnu_hash_{nullptr};
 
     std::string name_;
@@ -311,6 +326,7 @@ public:
     void Link(const std::string& out_filename) {
         DecideOffsets();
         BuildSymtab();
+        Relocate();
     }
 
 private:
@@ -339,6 +355,16 @@ private:
         for (ELFBinary* bin : link_binaries_) {
             bin->LoadDynSymtab(offsets_[bin], &symtab_);
         }
+    }
+
+    void Relocate() {
+        for (ELFBinary* bin : link_binaries_) {
+            RelocateBinary(bin);
+        }
+    }
+
+    void RelocateBinary(ELFBinary* bin) {
+        CHECK(bin->rel());
     }
 
     void InitLdLibraryPaths() {
