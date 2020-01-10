@@ -154,6 +154,7 @@ public:
     }
 
     void ReadDynSymtab() {
+        // TODO(hamaji): Support DT_HASH.
         CHECK(gnu_hash_);
         LOGF("Read dynsymtab of %s\n", name().c_str());
         const uint32_t* buckets = gnu_hash_->buckets();
@@ -166,6 +167,7 @@ public:
                 uint32_t h2 = *hv++;
                 const std::string name(strtab_ + sym->st_name);
                 // LOGF("%s@%s\n", name.c_str(), name_.c_str());
+                // TODO(hamaji): Handle version symbols.
                 CHECK(syms_.emplace(name, sym).second);
                 if (h2 & 1) break;
             }
