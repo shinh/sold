@@ -1,0 +1,5 @@
+add_library(base SHARED base.c)
+add_library(lib SHARED lib.c)
+target_link_libraries(lib PUBLIC base)
+add_executable(exe exe.c)
+target_link_libraries(exe base lib)
