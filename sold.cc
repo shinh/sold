@@ -384,7 +384,7 @@ private:
     }
 
     size_t CountPhdrs() const {
-        size_t num_phdrs = 3;
+        size_t num_phdrs = 4;
         for (ELFBinary* bin : link_binaries_) {
             for (Elf_Phdr* phdr : bin->phdrs()) {
                 if (phdr->p_type == PT_LOAD) {
@@ -442,7 +442,7 @@ private:
         }
 
         MakeDyn(DT_STRTAB, StrtabOffset());
-        MakeDyn(DT_STRSZ, StrtabOffset());
+        MakeDyn(DT_STRSZ, strtab_.size());
 
         MakeDyn(DT_NULL, 0);
     }
@@ -462,12 +462,21 @@ private:
         size_t seg_start = AlignNext(dyn_start + dyn_size);
 
         {
+            Elf_Phdr phdr = *main_binary_->FindPhdr(PT_LOAD);
+            phdr.p_offset = 0;
+            phdr.p_vaddr = 0;
+            phdr.p_paddr = 0;
+            phdr.p_filesz = seg_start;
+            phdr.p_memsz = seg_start;
+            phdrs.push_back(phdr);
+        }
+        {
             Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
-            // TODO(hamaji): Fill these values.
             phdr.p_offset = dyn_start;
             phdr.p_vaddr = dyn_start;
             phdr.p_paddr = dyn_start;
             phdr.p_filesz = dyn_size;
+            phdr.p_memsz = dyn_size;
             phdrs.push_back(phdr);
         }
 
@@ -496,10 +505,11 @@ private:
     }
 
     void DecideOffsets() {
+        uintptr_t offset = 0x1000;
         link_binaries_.push_back(main_binary_.get());
-        offsets_.emplace(main_binary_.get(), 0);
+        offsets_.emplace(main_binary_.get(), offset);
         Range main_range = main_binary_->GetRange();
-        uintptr_t offset = main_range.end;
+        offset = main_range.end;
         for (const auto& p : libraries_) {
             ELFBinary* bin = p.second.get();
             if (!ShouldLink(bin->soname())) {
