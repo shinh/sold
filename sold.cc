@@ -374,6 +374,7 @@ private:
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
         EmitEhdr(fp);
+        BuildInterp();
         BuildDynamic();
         EmitPhdrs(fp);
         CHECK(fwrite(strtab_.data(), 1, strtab_.size(), fp) == strtab_.size());
@@ -394,6 +395,10 @@ private:
         return num_phdrs;
     }
 
+    uintptr_t StrtabOffset() const {
+        return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
+    }
+
     void EmitEhdr(FILE* fp) {
         ehdr_ = *main_binary_->ehdr();
         ehdr_.e_shoff = 0;
@@ -403,11 +408,17 @@ private:
         Write(fp, ehdr_);
     }
 
-    Elf_Dyn MakeDyn(uint64_t tag, uintptr_t ptr) {
+    void MakeDyn(uint64_t tag, uintptr_t ptr) {
         Elf_Dyn dyn;
         dyn.d_tag = tag;
         dyn.d_un.d_ptr = ptr;
-        return dyn;
+        dynamic_.push_back(dyn);
+    }
+
+    void BuildInterp() {
+        const std::string interp = main_binary_->head() + main_binary_->phdrs()[1]->p_offset;
+        LOGF("Interp: %s\n", interp.c_str());
+        interp_offset_ = AddStr(interp);
     }
 
     void BuildDynamic() {
@@ -421,29 +432,30 @@ private:
         }
 
         for (const std::string& needed : neededs) {
-            dynamic_.push_back(MakeDyn(DT_NEEDED, AddStr(needed)));
+            MakeDyn(DT_NEEDED, AddStr(needed));
         }
         if (!main_binary_->rpath().empty()) {
-            dynamic_.push_back(MakeDyn(DT_RPATH, AddStr(main_binary_->rpath())));
+            MakeDyn(DT_RPATH, AddStr(main_binary_->rpath()));
         }
         if (main_binary_->runpath().empty()) {
-            dynamic_.push_back(MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath())));
+            MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath()));
         }
 
-        dynamic_.push_back(MakeDyn(DT_NULL, 0));
+        MakeDyn(DT_STRTAB, StrtabOffset());
+        MakeDyn(DT_STRSZ, StrtabOffset());
+
+        MakeDyn(DT_NULL, 0);
     }
 
     void EmitPhdrs(FILE* fp) {
         std::vector<Elf_Phdr> phdrs;
 
-        size_t strtab_start = sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
+        size_t strtab_start = StrtabOffset();
 
         CHECK(main_binary_->phdrs().size() > 2);
         phdrs.push_back(*main_binary_->FindPhdr(PT_PHDR));
         phdrs.push_back(*main_binary_->FindPhdr(PT_INTERP));
-        const std::string interp = main_binary_->head() + main_binary_->phdrs()[1]->p_offset;
-        LOGF("Interp: %s\n", interp.c_str());
-        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = strtab_start + AddStr(interp);
+        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = strtab_start + interp_offset_;
 
         size_t dyn_start = strtab_start + strtab_.size();
         size_t dyn_size = sizeof(Elf_Dyn) * dynamic_.size();
@@ -698,6 +710,8 @@ private:
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
+
+    uintptr_t interp_offset_;
     std::map<std::string, Elf_Sym*> symtab_;
     std::vector<Elf_Rel> rels_;
     std::string strtab_;
