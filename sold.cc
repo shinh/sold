@@ -31,6 +31,7 @@
 #define Elf_Rel Elf64_Rela
 #define ELF_R_SYM(val) ELF64_R_SYM(val)
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
+#define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
 
 #define CHECK(r) do { if (!(r)) assert(r); } while (0)
 
@@ -200,6 +201,10 @@ public:
                 }
             }
         }
+    }
+
+    const char* Str(uintptr_t name) {
+        return strtab_ + name;
     }
 
     char* GetPtr(uintptr_t offset) {
@@ -394,6 +399,16 @@ private:
         Elf_Rel newrel = *rel;
         newrel.r_offset += offset;
 
+        auto resolve_sym = [this, bin, sym]() {
+            const std::string name = bin->Str(sym->st_name);
+            auto found = symtab_.find(name);
+            if (found != symtab_.end()) {
+                return found->second->st_value;
+            } else {
+                return static_cast<uintptr_t>(0);
+            }
+        };
+
         switch (type) {
         case R_X86_64_RELATIVE: {
             *reinterpret_cast<uintptr_t*>(target) += offset;
@@ -401,7 +416,12 @@ private:
         }
 
         case R_X86_64_GLOB_DAT: {
-            CHECK(false);
+            uintptr_t val = resolve_sym();
+            if (val) {
+                *reinterpret_cast<uintptr_t*>(target) = val + addend;
+                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                newrel.r_addend = 0;
+            }
             break;
         }
 
