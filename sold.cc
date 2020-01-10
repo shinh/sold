@@ -63,7 +63,7 @@ bool HasPrefix(const std::string& str, const std::string& prefix) {
     return size_diff >= 0 && str.substr(0, prefix.size()) == prefix;
 }
 
-uintptr_t AlignUp(uintptr_t a) {
+uintptr_t AlignNext(uintptr_t a) {
     return (a + 4095) & ~4095;
 }
 
@@ -159,7 +159,7 @@ public:
                 continue;
             }
             range.start = std::min(range.start, phdr->p_vaddr);
-            range.end = std::max(range.end, AlignUp(phdr->p_vaddr + phdr->p_memsz));
+            range.end = std::max(range.end, AlignNext(phdr->p_vaddr + phdr->p_memsz));
         }
         return range;
     }
@@ -365,12 +365,20 @@ private:
         CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
     }
 
+    void EmitAlign(FILE* fp) {
+        long pos = ftell(fp);
+        std::string zero(AlignNext(pos) - pos, '\0');
+        CHECK(fwrite(zero.data(), 1, zero.size(), fp) == zero.size());
+    }
+
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
         EmitEhdr(fp);
         BuildDynamic();
         EmitPhdrs(fp);
+        CHECK(fwrite(strtab_.data(), 1, strtab_.size(), fp) == strtab_.size());
         EmitDynamic(fp);
+        EmitAlign(fp);
         fclose(fp);
     }
 
@@ -435,9 +443,9 @@ private:
         LOGF("Interp: %s\n", interp.c_str());
         phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = AddStr(interp);
 
-        size_t dyn_start = sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
+        size_t dyn_start = sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum + strtab_.size();
         size_t dyn_size = sizeof(Elf_Dyn) * dynamic_.size();
-        size_t seg_start = AlignUp(dyn_start + dyn_size);
+        size_t seg_start = AlignNext(dyn_start + dyn_size);
 
         {
             Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
@@ -471,7 +479,6 @@ private:
         for (const Elf_Dyn& dyn : dynamic_) {
             Write(fp, dyn);
         }
-        CHECK(fwrite(strtab_.data(), 1, strtab_.size(), fp) == strtab_.size());
     }
 
     void DecideOffsets() {
