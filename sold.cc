@@ -344,9 +344,29 @@ public:
         DecideOffsets();
         BuildSymtab();
         Relocate();
+        Emit(out_filename);
     }
 
 private:
+    template <class T>
+    void Write(FILE* fp, const T& v) {
+        CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
+    }
+
+    void Emit(const std::string& out_filename) {
+        FILE* fp = fopen(out_filename.c_str(), "wb");
+        EmitEhdr(fp);
+        fclose(fp);
+    }
+
+    void EmitEhdr(FILE* fp) {
+        Elf_Ehdr ehdr = *main_binary_->ehdr();
+        ehdr.e_shoff = 0;
+        ehdr.e_shnum = 0;
+        ehdr.e_shstrndx = 0;
+        Write(fp, ehdr);
+    }
+
     void DecideOffsets() {
         link_binaries_.push_back(main_binary_.get());
         offsets_.emplace(main_binary_.get(), 0);
