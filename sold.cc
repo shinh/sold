@@ -442,7 +442,7 @@ private:
         }
 
         MakeDyn(DT_STRTAB, StrtabOffset());
-        MakeDyn(DT_STRSZ, StrtabOffset());
+        MakeDyn(DT_STRSZ, strtab_.size());
 
         MakeDyn(DT_NULL, 0);
     }
@@ -463,11 +463,11 @@ private:
 
         {
             Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
-            // TODO(hamaji): Fill these values.
             phdr.p_offset = dyn_start;
             phdr.p_vaddr = dyn_start;
             phdr.p_paddr = dyn_start;
             phdr.p_filesz = dyn_size;
+            phdr.p_memsz = dyn_size;
             phdrs.push_back(phdr);
         }
 
