@@ -394,6 +394,13 @@ private:
         Write(fp, ehdr_);
     }
 
+    Elf_Dyn MakeDyn(uint64_t tag, uintptr_t ptr) {
+        Elf_Dyn dyn;
+        dyn.d_tag = tag;
+        dyn.d_un.d_ptr = ptr;
+        return dyn;
+    }
+
     void BuildDynamic() {
         std::set<ELFBinary*> linked(link_binaries_.begin(), link_binaries_.end());
         std::set<std::string> neededs;
@@ -405,10 +412,13 @@ private:
         }
 
         for (const std::string& needed : neededs) {
-            Elf_Dyn dyn;
-            dyn.d_tag = DT_NEEDED;
-            dyn.d_un.d_ptr = AddStr(needed);
-            dynamic_.push_back(dyn);
+            dynamic_.push_back(MakeDyn(DT_NEEDED, AddStr(needed)));
+        }
+        if (!main_binary_->rpath().empty()) {
+            dynamic_.push_back(MakeDyn(DT_RPATH, AddStr(main_binary_->rpath())));
+        }
+        if (main_binary_->runpath().empty()) {
+            dynamic_.push_back(MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath())));
         }
     }
 
