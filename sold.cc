@@ -373,13 +373,17 @@ private:
         const std::string& runpath = binary->runpath();
         const std::string& rpath = binary->rpath();
         if (runpath.empty() && !rpath.empty()) {
-            library_paths.push_back(ResolveRunPathVariables(binary, rpath));
+            for (const std::string& path : SplitString(rpath, ":")) {
+                library_paths.push_back(ResolveRunPathVariables(binary, path));
+            }
         }
         for (const std::string& path : ld_library_paths_) {
             library_paths.push_back(path);
         }
         if (!runpath.empty()) {
-            library_paths.push_back(ResolveRunPathVariables(binary, runpath));
+            for (const std::string& path : SplitString(runpath, ":")) {
+                library_paths.push_back(ResolveRunPathVariables(binary, path));
+            }
         }
 
         // TODO(hamaji): From ld.so.conf. Make this customizable.
