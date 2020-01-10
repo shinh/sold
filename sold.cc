@@ -370,6 +370,7 @@ private:
         EmitEhdr(fp);
         BuildDynamic();
         EmitPhdrs(fp);
+        EmitDynamic(fp);
         fclose(fp);
     }
 
@@ -420,12 +421,12 @@ private:
         if (main_binary_->runpath().empty()) {
             dynamic_.push_back(MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath())));
         }
+
+        dynamic_.push_back(MakeDyn(DT_NULL, 0));
     }
 
     void EmitPhdrs(FILE* fp) {
         std::vector<Elf_Phdr> phdrs;
-
-        size_t seg_start = AlignUp(sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum);
 
         CHECK(main_binary_->phdrs().size() > 2);
         phdrs.push_back(*main_binary_->FindPhdr(PT_PHDR));
@@ -434,13 +435,17 @@ private:
         LOGF("Interp: %s\n", interp.c_str());
         phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = AddStr(interp);
 
+        size_t dyn_start = sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
+        size_t dyn_size = sizeof(Elf_Dyn) * dynamic_.size();
+        size_t seg_start = AlignUp(dyn_start + dyn_size);
+
         {
             Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
             // TODO(hamaji): Fill these values.
-            phdr.p_offset = 0;
-            phdr.p_vaddr = 0;
-            phdr.p_paddr = 0;
-            phdr.p_filesz = 0;
+            phdr.p_offset = dyn_start;
+            phdr.p_vaddr = dyn_start;
+            phdr.p_paddr = dyn_start;
+            phdr.p_filesz = dyn_size;
             phdrs.push_back(phdr);
         }
 
@@ -460,6 +465,13 @@ private:
         for (const Elf_Phdr& phdr : phdrs) {
             Write(fp, phdr);
         }
+    }
+
+    void EmitDynamic(FILE* fp) {
+        for (const Elf_Dyn& dyn : dynamic_) {
+            Write(fp, dyn);
+        }
+        CHECK(fwrite(strtab_.data(), 1, strtab_.size(), fp) == strtab_.size());
     }
 
     void DecideOffsets() {
