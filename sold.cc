@@ -33,6 +33,14 @@
 
 namespace {
 
+bool FLAGS_LOG{true};
+
+#ifdef NOLOG
+# define LOGF(...) if (0) fprintf(stderr, __VA_ARGS__)
+#else
+# define LOGF(...) if (FLAGS_LOG) fprintf(stderr, __VA_ARGS__)
+#endif
+
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep) {
     std::vector<std::string> ret;
     if (str.empty()) return ret;
@@ -141,7 +149,7 @@ public:
     }
 
     void ReadDynSymtab() {
-        fprintf(stderr, "Read dynsymtab of %s\n", name().c_str());
+        LOGF("Read dynsymtab of %s\n", name().c_str());
         const uint32_t* buckets = gnu_hash_->buckets();
         const uint32_t* hashvals = gnu_hash_->hashvals();
         for (int i = 0; i < gnu_hash_->nbuckets; ++i) {
@@ -151,7 +159,7 @@ public:
             for (Elf_Sym* sym = &symtab_[n];; ++sym) {
                 uint32_t h2 = *hv++;
                 const std::string name(strtab_ + sym->st_name);
-                fprintf(stderr, "%s@%s\n", name.c_str(), name_.c_str());
+                // LOGF("%s@%s\n", name.c_str(), name_.c_str());
                 CHECK(syms_.emplace(name, sym).second);
                 if (h2 & 1) break;
             }
@@ -167,7 +175,7 @@ public:
             if (sym->st_value) {
                 sym->st_value += offset;
             }
-            fprintf(stderr, "%s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
+            LOGF("%s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
 
             auto inserted = symtab->emplace(name, sym);
             if (!inserted.second) {
@@ -236,8 +244,7 @@ private:
                 return addr - phdr->p_vaddr + phdr->p_offset;
             }
         }
-        fprintf(stderr, "Address %llx cannot be resolved\n",
-                static_cast<long long>(addr));
+        LOGF("Address %llx cannot be resolved\n", static_cast<long long>(addr));
         abort();
     }
 
@@ -312,8 +319,8 @@ private:
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
             offsets_.emplace(bin, range.start);
-            fprintf(stderr, "Assigned: %s %08lx-%08lx\n",
-                    bin->soname().c_str(), range.start, range.end);
+            LOGF("Assigned: %s %08lx-%08lx\n",
+                 bin->soname().c_str(), range.start, range.end);
             offset = range.end;
         }
     }
@@ -355,7 +362,7 @@ private:
         replace(out, "$ORIGIN", origin);
         replace(out, "${ORIGIN}", origin);
         if (out.find('$') != std::string::npos) {
-            fprintf(stderr, "Unsupported runpath: %s\n", runpath.c_str());
+            LOGF("Unsupported runpath: %s\n", runpath.c_str());
             abort();
         }
         return out;
@@ -401,12 +408,12 @@ private:
                 }
             }
             if (!library) {
-                fprintf(stderr, "Library %s not found\n", needed.c_str());
+                LOGF("Library %s not found\n", needed.c_str());
                 abort();
             }
 
-            fprintf(stderr, "Loaded: %s => %s\n",
-                    needed.c_str(), library->filename().c_str());
+            LOGF("Loaded: %s => %s\n",
+                 needed.c_str(), library->filename().c_str());
 
             auto inserted = libraries_.emplace(needed, std::move(library));
             CHECK(inserted.second);
@@ -436,7 +443,7 @@ private:
 
 int main(int argc, const char* argv[]) {
     if (argc <= 2) {
-        fprintf(stderr, "Usage: %s <in-elf> <out-elf>\n", argv[0]);
+        LOGF("Usage: %s <in-elf> <out-elf>\n", argv[0]);
         return 1;
     }
 
