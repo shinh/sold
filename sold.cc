@@ -137,6 +137,7 @@ public:
     const std::string& filename() const { return filename_; }
 
     const Elf_Ehdr* ehdr() const { return ehdr_; }
+    const std::vector<Elf_Phdr*> phdrs() const { return phdrs_; }
 
     const std::vector<std::string>& neededs() const { return neededs_; }
     const std::string& soname() const { return soname_; }
@@ -146,6 +147,8 @@ public:
     const Elf_Sym* symtab() const { return symtab_; }
     const Elf_Rel* rel() const { return rel_; }
     size_t num_rels() const { return num_rels_; }
+
+    const char* head() const { return head_; }
 
     const std::string& name() const { return name_; }
 
@@ -356,15 +359,60 @@ private:
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
         EmitEhdr(fp);
+        EmitPhdrs(fp);
         fclose(fp);
     }
 
+    size_t CountPhdrs() const {
+        size_t num_phdrs = 2;
+        for (ELFBinary* bin : link_binaries_) {
+            for (Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_LOAD) {
+                    ++num_phdrs;
+                }
+            }
+        }
+        return num_phdrs;
+    }
+
     void EmitEhdr(FILE* fp) {
-        Elf_Ehdr ehdr = *main_binary_->ehdr();
-        ehdr.e_shoff = 0;
-        ehdr.e_shnum = 0;
-        ehdr.e_shstrndx = 0;
-        Write(fp, ehdr);
+        ehdr_ = *main_binary_->ehdr();
+        ehdr_.e_shoff = 0;
+        ehdr_.e_shnum = 0;
+        ehdr_.e_shstrndx = 0;
+        ehdr_.e_phnum = CountPhdrs();
+        Write(fp, ehdr_);
+    }
+
+    void EmitPhdrs(FILE* fp) {
+        size_t seg_start = AlignUp(sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum);
+
+        std::vector<Elf_Phdr> phdrs;
+        CHECK(main_binary_->phdrs().size() > 2);
+        CHECK(main_binary_->phdrs()[0]->p_type == PT_PHDR);
+        phdrs.push_back(*main_binary_->phdrs()[0]);
+        CHECK(main_binary_->phdrs()[1]->p_type == PT_INTERP);
+        phdrs.push_back(*main_binary_->phdrs()[1]);
+        const std::string interp = main_binary_->head() + main_binary_->phdrs()[1]->p_offset;
+        LOGF("Interp: %s\n", interp.c_str());
+        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = AddStr(interp);
+
+        for (ELFBinary* bin : link_binaries_) {
+            const bool is_main = bin == main_binary_.get();
+            uintptr_t offset = offsets_[bin];
+            for (Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_LOAD) {
+                    phdrs.push_back(*phdr);
+                    phdrs.back().p_offset += offset + seg_start;
+                    phdrs.back().p_vaddr += offset;
+                    phdrs.back().p_paddr += offset;
+                }
+            }
+        }
+
+        for (const Elf_Phdr& phdr : phdrs) {
+            Write(fp, phdr);
+        }
     }
 
     void DecideOffsets() {
@@ -570,6 +618,13 @@ private:
         return true;
     }
 
+    uintptr_t AddStr(const std::string& s) {
+        uintptr_t pos = static_cast<uintptr_t>(strtab_.size());
+        strtab_ += s;
+        strtab_ += '\0';
+        return pos;
+    }
+
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
@@ -577,6 +632,8 @@ private:
     std::map<ELFBinary*, uintptr_t> offsets_;
     std::map<std::string, Elf_Sym*> symtab_;
     std::vector<Elf_Rel> rels_;
+    std::string strtab_;
+    Elf_Ehdr ehdr_;
 };
 
 int main(int argc, const char* argv[]) {
