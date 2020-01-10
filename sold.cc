@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,11 @@
 #define Elf_Phdr Elf64_Phdr
 #define Elf_Dyn Elf64_Dyn
 #define Elf_Addr Elf64_Addr
+#define Elf_Sym Elf64_Sym
+#define ELF_ST_BIND(val) ELF64_ST_BIND(val)
+#define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
+
+#define CHECK(r) do { if (!(r)) assert(r); } while (0)
 
 namespace {
 
@@ -53,6 +59,26 @@ struct Range {
     }
 };
 
+struct Elf_GnuHash {
+    uint32_t nbuckets{0};
+    uint32_t symndx{0};
+    uint32_t maskwords{0};
+    uint32_t shift2{0};
+    uint8_t tail[1];
+
+    Elf_Addr* bloom_filter() {
+        return reinterpret_cast<Elf_Addr*>(tail);
+    }
+
+    uint32_t* buckets() {
+        return reinterpret_cast<uint32_t*>(&bloom_filter()[maskwords]);
+    }
+
+    uint32_t* hashvals() {
+        return reinterpret_cast<uint32_t*>(&buckets()[nbuckets]);
+    }
+};
+
 }
 
 class ELFBinary {
@@ -63,6 +89,15 @@ public:
         head_(head),
         size_(size) {
         ehdr_ = reinterpret_cast<Elf_Ehdr*>(head);
+
+        {
+            size_t found = filename.rfind('/');
+            if (found == std::string::npos) {
+                name_ = filename;
+            } else {
+                name_ = filename.substr(found + 1);
+            }
+        }
 
         ParsePhdrs();
     }
@@ -91,6 +126,8 @@ public:
     const std::string& runpath() const { return runpath_; }
     const std::string& rpath() const { return rpath_; }
 
+    const std::string& name() const { return name_; }
+
     Range GetRange() const {
         Range range{std::numeric_limits<uintptr_t>::max(), std::numeric_limits<uintptr_t>::min()};
         for (Elf_Phdr* phdr : phdrs_) {
@@ -101,6 +138,44 @@ public:
             range.end = std::max(range.end, AlignUp(phdr->p_vaddr + phdr->p_memsz));
         }
         return range;
+    }
+
+    void ReadDynSymtab() {
+        fprintf(stderr, "Read dynsymtab of %s\n", name().c_str());
+        const uint32_t* buckets = gnu_hash_->buckets();
+        const uint32_t* hashvals = gnu_hash_->hashvals();
+        for (int i = 0; i < gnu_hash_->nbuckets; ++i) {
+            int n = buckets[i];
+            if (!n) continue;
+            const uint32_t* hv = &hashvals[n - gnu_hash_->symndx];
+            for (Elf_Sym* sym = &symtab_[n];; ++sym) {
+                uint32_t h2 = *hv++;
+                const std::string name(strtab_ + sym->st_name);
+                fprintf(stderr, "%s@%s\n", name.c_str(), name_.c_str());
+                CHECK(syms_.emplace(name, sym).second);
+                if (h2 & 1) break;
+            }
+        }
+    }
+
+    void LoadDynSymtab(uintptr_t offset, std::map<std::string, Elf_Sym*>* symtab) {
+        ReadDynSymtab();
+
+        for (const auto& p : syms_) {
+            const std::string& name = p.first;
+            Elf_Sym* sym = p.second;
+            if (sym->st_value) {
+                sym->st_value += offset;
+            }
+            fprintf(stderr, "%s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
+
+            auto inserted = symtab->emplace(name, sym);
+            if (!inserted.second) {
+                if (ELF_ST_BIND(sym->st_info) != STB_WEAK && ELF_ST_BIND(inserted.first->second->st_info) == STB_WEAK) {
+                    inserted.first->second = sym;
+                }
+            }
+        }
     }
 
 private:
@@ -116,12 +191,12 @@ private:
                 ParseDynamic(phdr->p_offset, phdr->p_filesz);
             }
         }
-        assert(!phdrs_.empty());
+        CHECK(!phdrs_.empty());
     }
 
     void ParseDynamic(size_t off, size_t size) {
         size_t dyn_size = sizeof(Elf_Dyn);
-        assert(size % dyn_size == 0);
+        CHECK(size % dyn_size == 0);
         std::vector<Elf_Dyn*> dyns;
         for (size_t i = 0; i < size / dyn_size; ++i) {
             Elf_Dyn* dyn = reinterpret_cast<Elf_Dyn*>(
@@ -132,16 +207,20 @@ private:
         for (Elf_Dyn* dyn : dyns) {
             if (dyn->d_tag == DT_STRTAB) {
                 strtab_ = head_ + OffsetFromAddr(dyn->d_un.d_ptr);
+            } else if (dyn->d_tag == DT_SYMTAB) {
+                symtab_ = reinterpret_cast<Elf_Sym*>(head_ + OffsetFromAddr(dyn->d_un.d_ptr));
+            } else if (dyn->d_tag == DT_GNU_HASH) {
+                gnu_hash_ = reinterpret_cast<Elf_GnuHash*>(head_ + OffsetFromAddr(dyn->d_un.d_ptr));
             }
         }
-        assert(strtab_);
+        CHECK(strtab_);
 
         for (Elf_Dyn* dyn : dyns) {
             if (dyn->d_tag == DT_NEEDED) {
                 const char* needed = strtab_ + dyn->d_un.d_val;
                 neededs_.push_back(needed);
             } else if (dyn->d_tag == DT_SONAME) {
-                soname_ = strtab_ + dyn->d_un.d_val;
+                name_ = soname_ = strtab_ + dyn->d_un.d_val;
             } else if (dyn->d_tag == DT_RUNPATH) {
                 runpath_ = strtab_ + dyn->d_un.d_val;
             } else if (dyn->d_tag == DT_RPATH) {
@@ -170,10 +249,15 @@ private:
     Elf_Ehdr* ehdr_{nullptr};
     std::vector<Elf_Phdr*> phdrs_;
     const char* strtab_{nullptr};
+    Elf_Sym* symtab_{nullptr};
     std::vector<std::string> neededs_;
     std::string soname_;
     std::string runpath_;
     std::string rpath_;
+    Elf_GnuHash* gnu_hash_{nullptr};
+
+    std::string name_;
+    std::map<std::string, Elf_Sym*> syms_;
 };
 
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
@@ -188,7 +272,7 @@ std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     size_t mapped_size = (size + 0xfff) & ~0xfff;
 
     char* p = (char*)mmap(NULL, mapped_size,
-                          PROT_READ, MAP_SHARED,
+                          PROT_READ | PROT_WRITE, MAP_PRIVATE,
                           fd, 0);
     if (p == MAP_FAILED)
         err(1, "mmap failed: %s", filename.c_str());
@@ -211,6 +295,7 @@ public:
 
     void Link(const std::string& out_filename) {
         DecideOffsets();
+        BuildSymtab();
     }
 
 private:
@@ -225,11 +310,21 @@ private:
             }
 
             const Range range = bin->GetRange() + offset;
-            assert(range.start == offset);
+            CHECK(range.start == offset);
             offsets_.emplace(bin, range.start);
             fprintf(stderr, "Assigned: %s %08lx-%08lx\n",
                     bin->soname().c_str(), range.start, range.end);
             offset = range.end;
+        }
+    }
+
+    void BuildSymtab() {
+        main_binary_->LoadDynSymtab(0, &symtab_);
+        for (const auto& p : libraries_) {
+            ELFBinary* bin = p.second.get();
+            if (ShouldLink(bin->soname())) {
+                bin->LoadDynSymtab(offsets_[bin], &symtab_);
+            }
         }
     }
 
@@ -314,7 +409,7 @@ private:
                     needed.c_str(), library->filename().c_str());
 
             auto inserted = libraries_.emplace(needed, std::move(library));
-            assert(inserted.second);
+            CHECK(inserted.second);
             ResolveLibraryPaths(inserted.first->second.get());
         }
     }
@@ -336,6 +431,7 @@ private:
     std::vector<std::string> ld_library_paths_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
+    std::map<std::string, Elf_Sym*> symtab_;
 };
 
 int main(int argc, const char* argv[]) {
