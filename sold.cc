@@ -54,6 +54,11 @@ std::vector<std::string> SplitString(const std::string& str, const std::string& 
     return ret;
 }
 
+bool HasPrefix(const std::string& str, const std::string& prefix) {
+    ssize_t size_diff = str.size() - prefix.size();
+    return size_diff >= 0 && str.substr(0, prefix.size()) == prefix;
+}
+
 uintptr_t AlignUp(uintptr_t a) {
     return (a + 4095) & ~4095;
 }
@@ -149,6 +154,7 @@ public:
     }
 
     void ReadDynSymtab() {
+        CHECK(gnu_hash_);
         LOGF("Read dynsymtab of %s\n", name().c_str());
         const uint32_t* buckets = gnu_hash_->buckets();
         const uint32_t* hashvals = gnu_hash_->hashvals();
@@ -432,8 +438,22 @@ private:
 
     static bool ShouldLink(const std::string& soname) {
         // TODO(hamaji): Make this customizable.
-        if (soname.substr(0, 7) == "libc.so" || soname.substr(0, 8) == "ld-linux") {
-            return false;
+        std::vector<std::string> nolink_prefixes = {
+            "libc.so",
+            "libm.so",
+            "libdl.so",
+            "librt.so",
+            "libpthread.so",
+            "libgcc_s.so",
+            "libstdc++.so",
+            "libgomp.so",
+            "ld-linux",
+            "libcuda.so",
+        };
+        for (const std::string& prefix : nolink_prefixes) {
+            if (HasPrefix(soname, prefix)) {
+                return false;
+            }
         }
         return true;
     }
