@@ -499,10 +499,10 @@ private:
             const bool is_main = bin == main_binary_.get();
             uintptr_t offset = offsets_[bin];
             for (Elf_Phdr* phdr : bin->loads()) {
+                phdr->p_offset += offset;
+                phdr->p_vaddr += offset;
+                phdr->p_paddr += offset;
                 phdrs.push_back(*phdr);
-                phdrs.back().p_offset += offset + seg_start;
-                phdrs.back().p_vaddr += offset;
-                phdrs.back().p_paddr += offset;
             }
         }
 
@@ -519,6 +519,8 @@ private:
 
     void EmitCode(FILE* fp) {
         for (ELFBinary* bin : link_binaries_) {
+            fprintf(stderr, "Emitting code of %s from %lx\n",
+                    bin->name().c_str(), ftell(fp));
             for (Elf_Phdr* phdr : bin->loads()) {
                 EmitPad(fp, phdr->p_offset);
                 WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
