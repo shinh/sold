@@ -672,8 +672,11 @@ private:
     }
 
     bool Exists(const std::string& filename) {
-        std::ifstream ifs(filename);
-        return static_cast<bool>(ifs);
+        struct stat st;
+        if (stat(filename.c_str(), &st) != 0) {
+            return false;
+        }
+        return (st.st_mode & S_IFMT) & S_IFREG;
     }
 
     static bool ShouldLink(const std::string& soname) {
