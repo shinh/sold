@@ -138,6 +138,7 @@ public:
 
     const Elf_Ehdr* ehdr() const { return ehdr_; }
     const std::vector<Elf_Phdr*> phdrs() const { return phdrs_; }
+    const std::vector<Elf_Phdr*> loads() const { return loads_; }
 
     const std::vector<std::string>& neededs() const { return neededs_; }
     const std::string& soname() const { return soname_; }
@@ -154,10 +155,7 @@ public:
 
     Range GetRange() const {
         Range range{std::numeric_limits<uintptr_t>::max(), std::numeric_limits<uintptr_t>::min()};
-        for (Elf_Phdr* phdr : phdrs_) {
-            if (phdr->p_type != PT_LOAD) {
-                continue;
-            }
+        for (Elf_Phdr* phdr : loads_) {
             range.start = std::min(range.start, phdr->p_vaddr);
             range.end = std::max(range.end, AlignNext(phdr->p_vaddr + phdr->p_memsz));
         }
@@ -229,6 +227,9 @@ private:
             Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(
                 head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
             phdrs_.push_back(phdr);
+            if (phdr->p_type == PT_LOAD) {
+                loads_.push_back(phdr);
+            }
         }
 
         for (Elf_Phdr* phdr : phdrs_) {
@@ -285,9 +286,8 @@ private:
     }
 
     Elf_Addr OffsetFromAddr(Elf_Addr addr) {
-        for (Elf_Phdr* phdr : phdrs_) {
-            if (phdr->p_type == PT_LOAD &&
-                phdr->p_vaddr <= addr && addr < phdr->p_vaddr + phdr->p_memsz) {
+        for (Elf_Phdr* phdr : loads_) {
+            if (phdr->p_vaddr <= addr && addr < phdr->p_vaddr + phdr->p_memsz) {
                 return addr - phdr->p_vaddr + phdr->p_offset;
             }
         }
@@ -302,6 +302,7 @@ private:
 
     Elf_Ehdr* ehdr_{nullptr};
     std::vector<Elf_Phdr*> phdrs_;
+    std::vector<Elf_Phdr*> loads_;
     const char* strtab_{nullptr};
     Elf_Sym* symtab_{nullptr};
 
@@ -369,10 +370,22 @@ private:
         CHECK(fwrite(buf, 1, size, fp) == size);
     }
 
+    void EmitZeros(FILE* fp, uintptr_t cnt) {
+        std::string zero(cnt, '\0');
+        WriteBuf(fp, zero.data(), zero.size());
+    }
+
+    void EmitPad(FILE* fp, uintptr_t to) {
+        uint pos = ftell(fp);
+        CHECK(pos >= 0);
+        CHECK(pos <= to);
+        EmitZeros(fp, to - pos);
+    }
+
     void EmitAlign(FILE* fp) {
         long pos = ftell(fp);
-        std::string zero(AlignNext(pos) - pos, '\0');
-        WriteBuf(fp, zero.data(), zero.size());
+        CHECK(pos >= 0);
+        EmitZeros(fp, AlignNext(pos) - pos);
     }
 
     void Emit(const std::string& out_filename) {
@@ -384,17 +397,15 @@ private:
         WriteBuf(fp, strtab_.data(), strtab_.size());
         EmitDynamic(fp);
         EmitAlign(fp);
+
+        EmitCode(fp);
         fclose(fp);
     }
 
     size_t CountPhdrs() const {
         size_t num_phdrs = 4;
         for (ELFBinary* bin : link_binaries_) {
-            for (Elf_Phdr* phdr : bin->phdrs()) {
-                if (phdr->p_type == PT_LOAD) {
-                    ++num_phdrs;
-                }
-            }
+            num_phdrs += bin->loads().size();
         }
         return num_phdrs;
     }
@@ -420,7 +431,7 @@ private:
     }
 
     void BuildInterp() {
-        const std::string interp = main_binary_->head() + main_binary_->phdrs()[1]->p_offset;
+        const std::string interp = main_binary_->head() + main_binary_->FindPhdr(PT_INTERP)->p_offset;
         LOGF("Interp: %s\n", interp.c_str());
         interp_offset_ = AddStr(interp);
     }
@@ -487,13 +498,11 @@ private:
         for (ELFBinary* bin : link_binaries_) {
             const bool is_main = bin == main_binary_.get();
             uintptr_t offset = offsets_[bin];
-            for (Elf_Phdr* phdr : bin->phdrs()) {
-                if (phdr->p_type == PT_LOAD) {
-                    phdrs.push_back(*phdr);
-                    phdrs.back().p_offset += offset + seg_start;
-                    phdrs.back().p_vaddr += offset;
-                    phdrs.back().p_paddr += offset;
-                }
+            for (Elf_Phdr* phdr : bin->loads()) {
+                phdrs.push_back(*phdr);
+                phdrs.back().p_offset += offset + seg_start;
+                phdrs.back().p_vaddr += offset;
+                phdrs.back().p_paddr += offset;
             }
         }
 
@@ -505,6 +514,16 @@ private:
     void EmitDynamic(FILE* fp) {
         for (const Elf_Dyn& dyn : dynamic_) {
             Write(fp, dyn);
+        }
+    }
+
+    void EmitCode(FILE* fp) {
+        for (ELFBinary* bin : link_binaries_) {
+            for (Elf_Phdr* phdr : bin->loads()) {
+                EmitPad(fp, phdr->p_offset);
+                WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
+            }
+            EmitAlign(fp);
         }
     }
 
