@@ -365,10 +365,14 @@ private:
         CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
     }
 
+    void WriteBuf(FILE* fp, const void* buf, size_t size) {
+        CHECK(fwrite(buf, 1, size, fp) == size);
+    }
+
     void EmitAlign(FILE* fp) {
         long pos = ftell(fp);
         std::string zero(AlignNext(pos) - pos, '\0');
-        CHECK(fwrite(zero.data(), 1, zero.size(), fp) == zero.size());
+        WriteBuf(fp, zero.data(), zero.size());
     }
 
     void Emit(const std::string& out_filename) {
@@ -377,7 +381,7 @@ private:
         BuildInterp();
         BuildDynamic();
         EmitPhdrs(fp);
-        CHECK(fwrite(strtab_.data(), 1, strtab_.size(), fp) == strtab_.size());
+        WriteBuf(fp, strtab_.data(), strtab_.size());
         EmitDynamic(fp);
         EmitAlign(fp);
         fclose(fp);
