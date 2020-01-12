@@ -550,6 +550,7 @@ private:
 
     void BuildEhdr() {
         ehdr_ = *main_binary_->ehdr();
+        ehdr_.e_entry += offsets_[main_binary_.get()];
         ehdr_.e_shoff = 0;
         ehdr_.e_shnum = 0;
         ehdr_.e_shstrndx = 0;
