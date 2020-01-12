@@ -345,6 +345,33 @@ std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     err(1, "unknown file format: %s", filename.c_str());
 }
 
+class StrtabBuilder {
+public:
+    uintptr_t Add(const std::string& s) {
+        CHECK(!is_freezed_);
+        uintptr_t pos = static_cast<uintptr_t>(strtab_.size());
+        strtab_ += s;
+        strtab_ += '\0';
+        return pos;
+    }
+
+    void Freeze() {
+        is_freezed_ = true;
+    }
+
+    size_t size() const {
+        return strtab_.size();
+    }
+
+    const void* data() const {
+        return strtab_.data();
+    }
+
+private:
+    std::string strtab_;
+    bool is_freezed_{false};
+};
+
 class SymtabBuilder {
 public:
     void SetSrcSyms(std::map<std::string, Elf_Sym*> syms) {
@@ -387,9 +414,28 @@ public:
         return undef_names;
     }
 
+    void Build(StrtabBuilder* strtab) {
+        for (const std::string& name : GetUndefinedNames()) {
+            Elf_Sym sym{};
+            sym.st_name = strtab->Add(name);
+            sym.st_info = ELF_ST_INFO(STB_GLOBAL, STT_FUNC);
+            sym.st_other = 0;
+            sym.st_shndx = 0;
+            sym.st_value = 0;
+            sym.st_size = 0;
+            symtab_.push_back(sym);
+        }
+    }
+
+    const std::vector<Elf_Sym>& Get() {
+        return symtab_;
+    }
+
 private:
     std::map<std::string, Elf_Sym*> src_syms_;
     std::map<std::string, uintptr_t> undefs_;
+
+    std::vector<Elf_Sym> symtab_;
 };
 
 class Sold {
@@ -406,9 +452,12 @@ public:
         CollectSymbols();
         Relocate();
 
+        syms_.Build(&strtab_);
         BuildEhdr();
         BuildInterp();
         BuildDynamic();
+
+        strtab_.Freeze();
 
         Emit(out_filename);
     }
@@ -581,14 +630,7 @@ private:
 
     void EmitSymtab(FILE* fp) {
         CHECK(ftell(fp) == SymtabOffset());
-        for (const std::string& name : syms_.GetUndefinedNames()) {
-            Elf_Sym sym{};
-            sym.st_name = AddStr(name);
-            sym.st_info = ELF_ST_INFO(STB_GLOBAL, STT_FUNC);
-            sym.st_other = 0;
-            sym.st_shndx = 0;
-            sym.st_value = 0;
-            sym.st_size = 0;
+        for (const Elf_Sym& sym : syms_.Get()) {
             Write(fp, sym);
         }
     }
@@ -827,10 +869,7 @@ private:
     }
 
     uintptr_t AddStr(const std::string& s) {
-        uintptr_t pos = static_cast<uintptr_t>(strtab_.size());
-        strtab_ += s;
-        strtab_ += '\0';
-        return pos;
+        return strtab_.Add(s);
     }
 
     std::unique_ptr<ELFBinary> main_binary_;
@@ -842,7 +881,7 @@ private:
     uintptr_t interp_offset_;
     SymtabBuilder syms_;
     std::vector<Elf_Rel> rels_;
-    std::string strtab_;
+    StrtabBuilder strtab_;
     Elf_Ehdr ehdr_;
     std::vector<Elf_Dyn> dynamic_;
 };
