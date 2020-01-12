@@ -183,6 +183,13 @@ public:
                 if (h2 & 1) break;
             }
         }
+        for (int n = 0; n < gnu_hash_->symndx; ++n) {
+            Elf_Sym* sym = &symtab_[n];
+            if (sym->st_name) {
+                const std::string name(strtab_ + sym->st_name);
+                CHECK(syms_.emplace(name, sym).second);
+            }
+        }
     }
 
     void LoadDynSymtab(uintptr_t offset, std::map<std::string, Elf_Sym*>* symtab) {
