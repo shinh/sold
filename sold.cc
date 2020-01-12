@@ -622,6 +622,8 @@ private:
                 phdr->p_offset += offset;
                 phdr->p_vaddr += offset;
                 phdr->p_paddr += offset;
+                // TODO(hamaji): Add PF_W only for GOT.
+                phdr->p_flags |= PF_W;
                 phdrs.push_back(*phdr);
             }
         }
