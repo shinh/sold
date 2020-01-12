@@ -479,6 +479,7 @@ private:
         {
             Elf_Phdr phdr = *main_binary_->FindPhdr(PT_LOAD);
             phdr.p_offset = 0;
+            phdr.p_flags = PF_R | PF_W;
             phdr.p_vaddr = 0;
             phdr.p_paddr = 0;
             phdr.p_filesz = seg_start;
@@ -488,6 +489,7 @@ private:
         {
             Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
             phdr.p_offset = dyn_start;
+            phdr.p_flags = PF_R | PF_W;
             phdr.p_vaddr = dyn_start;
             phdr.p_paddr = dyn_start;
             phdr.p_filesz = dyn_size;
