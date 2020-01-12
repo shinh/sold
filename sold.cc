@@ -28,6 +28,7 @@
 #define Elf_Sym Elf64_Sym
 #define ELF_ST_BIND(val) ELF64_ST_BIND(val)
 #define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
+#define ELF_ST_INFO(bind, type) ELF64_ST_INFO(bind, type)
 #define Elf_Rel Elf64_Rela
 #define ELF_R_SYM(val) ELF64_R_SYM(val)
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
@@ -350,13 +351,24 @@ public:
         src_syms_ = syms;
     }
 
-    uintptr_t Resolve(const std::string& name) {
+    bool Resolve(const std::string& name, uintptr_t* val_or_index) {
+        {
+            auto found = undefs_.find(name);
+            if (found != undefs_.end()) {
+                *val_or_index = found->second;
+                return false;
+            }
+        }
+
         auto found = src_syms_.find(name);
         if (found != src_syms_.end()) {
-            return found->second->st_value;
+            *val_or_index = found->second->st_value;
+            return true;
         } else {
-            undefs_.insert(name);
-            return static_cast<uintptr_t>(0);
+            uintptr_t index = undefs_.size();
+            CHECK(undefs_.emplace(name, index).second);
+            *val_or_index = index;
+            return false;
         }
     }
 
@@ -364,9 +376,20 @@ public:
         return undefs_.size();
     }
 
+    std::vector<std::string> GetUndefinedNames() const {
+        std::vector<std::string> undef_names(undefs_.size());
+        for (const auto& p : undefs_) {
+            const std::string& name = p.first;
+            uintptr_t index = p.second;
+            CHECK(index < undef_names.size());
+            undef_names[index] = name;
+        }
+        return undef_names;
+    }
+
 private:
     std::map<std::string, Elf_Sym*> src_syms_;
-    std::set<std::string> undefs_;
+    std::map<std::string, uintptr_t> undefs_;
 };
 
 class Sold {
@@ -422,7 +445,8 @@ private:
         FILE* fp = fopen(out_filename.c_str(), "wb");
         Write(fp, ehdr_);
         EmitPhdrs(fp);
-        WriteBuf(fp, strtab_.data(), strtab_.size());
+        EmitSymtab(fp);
+        EmitStrtab(fp);
         EmitRel(fp);
         EmitDynamic(fp);
         EmitAlign(fp);
@@ -439,16 +463,16 @@ private:
         return num_phdrs;
     }
 
-    uintptr_t StrtabOffset() const {
+    uintptr_t SymtabOffset() const {
         return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
     }
 
-    uintptr_t SymOffset() const {
-        return StrtabOffset() + strtab_.size();
+    uintptr_t StrtabOffset() const {
+        return SymtabOffset() + syms_.size() * sizeof(Elf_Sym);
     }
 
     uintptr_t RelOffset() const {
-        return SymOffset() + syms_.size() * sizeof(Elf_Sym);
+        return StrtabOffset() + strtab_.size();
     }
 
     uintptr_t DynamicOffset() const {
@@ -555,13 +579,34 @@ private:
         }
     }
 
+    void EmitSymtab(FILE* fp) {
+        CHECK(ftell(fp) == SymtabOffset());
+        for (const std::string& name : syms_.GetUndefinedNames()) {
+            Elf_Sym sym{};
+            sym.st_name = AddStr(name);
+            sym.st_info = ELF_ST_INFO(STB_GLOBAL, STT_FUNC);
+            sym.st_other = 0;
+            sym.st_shndx = 0;
+            sym.st_value = 0;
+            sym.st_size = 0;
+            Write(fp, sym);
+        }
+    }
+
+    void EmitStrtab(FILE* fp) {
+        CHECK(ftell(fp) == StrtabOffset());
+        WriteBuf(fp, strtab_.data(), strtab_.size());
+    }
+
     void EmitRel(FILE* fp) {
+        CHECK(ftell(fp) == RelOffset());
         for (const Elf_Rel& rel : rels_) {
             Write(fp, rel);
         }
     }
 
     void EmitDynamic(FILE* fp) {
+        CHECK(ftell(fp) == DynamicOffset());
         for (const Elf_Dyn& dyn : dynamic_) {
             Write(fp, dyn);
         }
@@ -635,11 +680,6 @@ private:
         Elf_Rel newrel = *rel;
         newrel.r_offset += offset;
 
-        auto resolve_sym = [this, bin, sym]() {
-            const std::string name = bin->Str(sym->st_name);
-            return syms_.Resolve(name);
-        };
-
         switch (type) {
         case R_X86_64_RELATIVE: {
             *reinterpret_cast<uintptr_t*>(target) += offset;
@@ -647,11 +687,13 @@ private:
         }
 
         case R_X86_64_GLOB_DAT: {
-            uintptr_t val = resolve_sym();
-            if (val) {
-                *reinterpret_cast<uintptr_t*>(target) = val + addend;
+            uintptr_t val_or_index;
+            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                *reinterpret_cast<uintptr_t*>(target) = val_or_index + addend;
                 newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                 newrel.r_addend = 0;
+            } else {
+                newrel.r_info = ELF_R_INFO(val_or_index, type);
             }
             break;
         }
