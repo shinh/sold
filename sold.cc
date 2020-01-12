@@ -572,6 +572,9 @@ private:
         MakeDyn(DT_STRTAB, StrtabOffset());
         MakeDyn(DT_STRSZ, strtab_.size());
 
+        MakeDyn(DT_SYMTAB, SymtabOffset());
+        MakeDyn(DT_SYMENT, sizeof(Elf_Sym));
+
         MakeDyn(DT_RELA, RelOffset());
         MakeDyn(DT_RELAENT, sizeof(Elf_Rel));
         MakeDyn(DT_RELASZ, rels_.size() * sizeof(Elf_Rel));
