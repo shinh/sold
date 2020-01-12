@@ -381,57 +381,69 @@ private:
 
 class SymtabBuilder {
 public:
+    struct Symbol {
+        Elf_Sym sym;
+        uintptr_t index;
+    };
+
     void SetSrcSyms(std::map<std::string, Elf_Sym*> syms) {
         src_syms_ = syms;
     }
 
+    uintptr_t AddSym(const std::string& name) {
+        uintptr_t index = sym_names_.size();
+        sym_names_.push_back(name);
+        return index;
+    }
+
     bool Resolve(const std::string& name, uintptr_t* val_or_index) {
-        {
-            auto found = undefs_.find(name);
-            if (found != undefs_.end()) {
-                *val_or_index = found->second;
-                return false;
+        Symbol sym{};
+        sym.sym.st_name = 0;
+        sym.sym.st_info = 0;
+        sym.sym.st_other = 0;
+        sym.sym.st_shndx = 0;
+        sym.sym.st_value = 0;
+        sym.sym.st_size = 0;
+
+        auto found = syms_.find(name);
+        if (found != syms_.end()) {
+            sym = found->second;
+        } else {
+            auto found = src_syms_.find(name);
+            if (found != src_syms_.end()) {
+                sym.sym = *found->second;
+                if (ELF_ST_BIND(sym.sym.st_info) == STB_WEAK) {
+                    sym.index = AddSym(name);
+                    CHECK(syms_.emplace(name, sym).second);
+                }
+            } else {
+                sym.index = AddSym(name);
+                CHECK(syms_.emplace(name, sym).second);
             }
         }
 
-        auto found = src_syms_.find(name);
-        if (found != src_syms_.end()) {
-            *val_or_index = found->second->st_value;
-            return true;
-        } else {
-            uintptr_t index = undefs_.size();
-            CHECK(undefs_.emplace(name, index).second);
-            *val_or_index = index;
+        if (!sym.sym.st_value || ELF_ST_BIND(sym.sym.st_info) == STB_WEAK) {
+            *val_or_index = sym.index;
             return false;
+        } else {
+            *val_or_index = sym.sym.st_value;
+            return true;
+        }
+
+    }
+
+    void Build(StrtabBuilder* strtab) {
+        for (const std::string& name : sym_names_) {
+            auto found = syms_.find(name);
+            CHECK(found != syms_.end());
+            Elf_Sym sym = found->second.sym;
+            sym.st_name = strtab->Add(name);
+            symtab_.push_back(sym);
         }
     }
 
     uintptr_t size() const {
-        return undefs_.size();
-    }
-
-    std::vector<std::string> GetUndefinedNames() const {
-        std::vector<std::string> undef_names(undefs_.size());
-        for (const auto& p : undefs_) {
-            const std::string& name = p.first;
-            uintptr_t index = p.second;
-            CHECK(index < undef_names.size());
-            undef_names[index] = name;
-        }
-        return undef_names;
-    }
-
-    void Build(StrtabBuilder* strtab) {
-        for (const std::string& name : GetUndefinedNames()) {
-            Elf_Sym sym{};
-            sym.st_name = strtab->Add(name);
-            sym.st_info = ELF_ST_INFO(STB_GLOBAL, STT_FUNC);
-            sym.st_other = 0;
-            sym.st_shndx = 0;
-            sym.st_value = 0;
-            sym.st_size = 0;
-            symtab_.push_back(sym);
-        }
+        return symtab_.size();
     }
 
     const std::vector<Elf_Sym>& Get() {
@@ -440,8 +452,9 @@ public:
 
 private:
     std::map<std::string, Elf_Sym*> src_syms_;
-    std::map<std::string, uintptr_t> undefs_;
+    std::map<std::string, Symbol> syms_;
 
+    std::vector<std::string> sym_names_;
     std::vector<Elf_Sym> symtab_;
 };
 
