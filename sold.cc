@@ -344,6 +344,31 @@ std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     err(1, "unknown file format: %s", filename.c_str());
 }
 
+class SymtabBuilder {
+public:
+    void SetSrcSyms(std::map<std::string, Elf_Sym*> syms) {
+        src_syms_ = syms;
+    }
+
+    uintptr_t Resolve(const std::string& name) {
+        auto found = src_syms_.find(name);
+        if (found != src_syms_.end()) {
+            return found->second->st_value;
+        } else {
+            undefs_.insert(name);
+            return static_cast<uintptr_t>(0);
+        }
+    }
+
+    uintptr_t size() const {
+        return undefs_.size();
+    }
+
+private:
+    std::map<std::string, Elf_Sym*> src_syms_;
+    std::set<std::string> undefs_;
+};
+
 class Sold {
 public:
     Sold(const std::string& elf_filename) {
@@ -355,7 +380,7 @@ public:
 
     void Link(const std::string& out_filename) {
         DecideOffsets();
-        BuildSymtab();
+        CollectSymbols();
         Relocate();
 
         BuildEhdr();
@@ -418,8 +443,12 @@ private:
         return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
     }
 
-    uintptr_t RelOffset() const {
+    uintptr_t SymOffset() const {
         return StrtabOffset() + strtab_.size();
+    }
+
+    uintptr_t RelOffset() const {
+        return SymOffset() + syms_.size() * sizeof(Elf_Sym);
     }
 
     uintptr_t DynamicOffset() const {
@@ -573,10 +602,12 @@ private:
         }
     }
 
-    void BuildSymtab() {
+    void CollectSymbols() {
+        std::map<std::string, Elf_Sym*> syms;
         for (ELFBinary* bin : link_binaries_) {
-            bin->LoadDynSymtab(offsets_[bin], &symtab_);
+            bin->LoadDynSymtab(offsets_[bin], &syms);
         }
+        syms_.SetSrcSyms(syms);
     }
 
     void Relocate() {
@@ -606,12 +637,7 @@ private:
 
         auto resolve_sym = [this, bin, sym]() {
             const std::string name = bin->Str(sym->st_name);
-            auto found = symtab_.find(name);
-            if (found != symtab_.end()) {
-                return found->second->st_value;
-            } else {
-                return static_cast<uintptr_t>(0);
-            }
+            return syms_.Resolve(name);
         };
 
         switch (type) {
@@ -772,7 +798,7 @@ private:
     std::map<ELFBinary*, uintptr_t> offsets_;
 
     uintptr_t interp_offset_;
-    std::map<std::string, Elf_Sym*> symtab_;
+    SymtabBuilder syms_;
     std::vector<Elf_Rel> rels_;
     std::string strtab_;
     Elf_Ehdr ehdr_;
