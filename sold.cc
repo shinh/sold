@@ -358,6 +358,7 @@ public:
         BuildSymtab();
         Relocate();
 
+        BuildEhdr();
         BuildInterp();
         BuildDynamic();
 
@@ -394,9 +395,10 @@ private:
 
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
-        EmitEhdr(fp);
+        Write(fp, ehdr_);
         EmitPhdrs(fp);
         WriteBuf(fp, strtab_.data(), strtab_.size());
+        EmitRel(fp);
         EmitDynamic(fp);
         EmitAlign(fp);
 
@@ -416,13 +418,20 @@ private:
         return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
     }
 
-    void EmitEhdr(FILE* fp) {
+    uintptr_t RelOffset() const {
+        return StrtabOffset() + strtab_.size();
+    }
+
+    uintptr_t DynamicOffset() const {
+        return RelOffset() + rels_.size() * sizeof(Elf_Rel);
+    }
+
+    void BuildEhdr() {
         ehdr_ = *main_binary_->ehdr();
         ehdr_.e_shoff = 0;
         ehdr_.e_shnum = 0;
         ehdr_.e_shstrndx = 0;
         ehdr_.e_phnum = CountPhdrs();
-        Write(fp, ehdr_);
     }
 
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
@@ -461,20 +470,22 @@ private:
         MakeDyn(DT_STRTAB, StrtabOffset());
         MakeDyn(DT_STRSZ, strtab_.size());
 
+        MakeDyn(DT_RELA, RelOffset());
+        MakeDyn(DT_RELAENT, sizeof(Elf_Rel));
+        MakeDyn(DT_RELASZ, rels_.size() * sizeof(Elf_Rel));
+
         MakeDyn(DT_NULL, 0);
     }
 
     void EmitPhdrs(FILE* fp) {
         std::vector<Elf_Phdr> phdrs;
 
-        size_t strtab_start = StrtabOffset();
-
         CHECK(main_binary_->phdrs().size() > 2);
         phdrs.push_back(*main_binary_->FindPhdr(PT_PHDR));
         phdrs.push_back(*main_binary_->FindPhdr(PT_INTERP));
-        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = strtab_start + interp_offset_;
+        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = StrtabOffset() + interp_offset_;
 
-        size_t dyn_start = strtab_start + strtab_.size();
+        size_t dyn_start = DynamicOffset();
         size_t dyn_size = sizeof(Elf_Dyn) * dynamic_.size();
         size_t seg_start = AlignNext(dyn_start + dyn_size);
 
@@ -512,6 +523,12 @@ private:
 
         for (const Elf_Phdr& phdr : phdrs) {
             Write(fp, phdr);
+        }
+    }
+
+    void EmitRel(FILE* fp) {
+        for (const Elf_Rel& rel : rels_) {
+            Write(fp, rel);
         }
     }
 
