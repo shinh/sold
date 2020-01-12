@@ -619,12 +619,13 @@ private:
             const bool is_main = bin == main_binary_.get();
             uintptr_t offset = offsets_[bin];
             for (Elf_Phdr* phdr : bin->loads()) {
-                phdr->p_offset += offset;
-                phdr->p_vaddr += offset;
-                phdr->p_paddr += offset;
+                Elf_Phdr new_phdr = *phdr;
+                new_phdr.p_offset += offset;
+                new_phdr.p_vaddr += offset;
+                new_phdr.p_paddr += offset;
                 // TODO(hamaji): Add PF_W only for GOT.
-                phdr->p_flags |= PF_W;
-                phdrs.push_back(*phdr);
+                new_phdr.p_flags |= PF_W;
+                phdrs.push_back(new_phdr);
             }
         }
 
@@ -664,7 +665,7 @@ private:
             fprintf(stderr, "Emitting code of %s from %lx\n",
                     bin->name().c_str(), ftell(fp));
             for (Elf_Phdr* phdr : bin->loads()) {
-                EmitPad(fp, phdr->p_offset);
+                EmitPad(fp, offsets_[bin] + phdr->p_offset);
                 WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
             }
             EmitAlign(fp);
