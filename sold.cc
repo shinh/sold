@@ -357,6 +357,10 @@ public:
         DecideOffsets();
         BuildSymtab();
         Relocate();
+
+        BuildInterp();
+        BuildDynamic();
+
         Emit(out_filename);
     }
 
@@ -391,8 +395,6 @@ private:
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
         EmitEhdr(fp);
-        BuildInterp();
-        BuildDynamic();
         EmitPhdrs(fp);
         WriteBuf(fp, strtab_.data(), strtab_.size());
         EmitDynamic(fp);
