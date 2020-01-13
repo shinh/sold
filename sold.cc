@@ -203,11 +203,14 @@ public:
             if (sym->st_value) {
                 sym->st_value += offset;
             }
-            LOGF("%s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
+            LOGF("Symbol %s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
 
             auto inserted = symtab->emplace(name, sym);
             if (!inserted.second) {
-                if (ELF_ST_BIND(sym->st_info) != STB_WEAK && ELF_ST_BIND(inserted.first->second->st_info) == STB_WEAK) {
+                Elf_Sym* sym2 = inserted.first->second;
+                int prio = sym->st_value ? 2 : ELF_ST_BIND(sym->st_info) == STB_WEAK;
+                int prio2 = sym2->st_value ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
+                if (prio > prio2) {
                     inserted.first->second = sym;
                 }
             }
