@@ -757,7 +757,6 @@ private:
         const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
         int type = ELF_R_TYPE(rel->r_info);
         const uintptr_t addend = rel->r_addend;
-        void* target = bin->GetPtr(rel->r_offset);
         Elf_Rel newrel = *rel;
         newrel.r_offset += offset;
 
@@ -769,24 +768,12 @@ private:
             break;
         }
 
-        case R_X86_64_GLOB_DAT: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
-                *reinterpret_cast<uintptr_t*>(target) = val_or_index + addend;
-                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-                newrel.r_addend = 0;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
-            }
-            break;
-        }
-
+        case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT: {
             uintptr_t val_or_index;
             if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
-                *reinterpret_cast<uintptr_t*>(target) = val_or_index + addend;
                 newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-                newrel.r_addend = 0;
+                newrel.r_addend += val_or_index;
             } else {
                 newrel.r_info = ELF_R_INFO(val_or_index, type);
             }
