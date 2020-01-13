@@ -749,6 +749,8 @@ private:
         Elf_Rel newrel = *rel;
         newrel.r_offset += offset;
 
+        LOGF("Relocate %s at %lx\n", bin->Str(sym->st_name), rel->r_offset);
+
         switch (type) {
         case R_X86_64_RELATIVE: {
             *reinterpret_cast<uintptr_t*>(target) += offset;
