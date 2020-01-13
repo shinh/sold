@@ -412,7 +412,7 @@ public:
             auto found = src_syms_.find(name);
             if (found != src_syms_.end()) {
                 sym.sym = *found->second;
-                if (ELF_ST_BIND(sym.sym.st_info) == STB_WEAK) {
+                if (!sym.sym.st_value) {
                     sym.index = AddSym(name);
                     CHECK(syms_.emplace(name, sym).second);
                 }
@@ -422,7 +422,7 @@ public:
             }
         }
 
-        if (!sym.sym.st_value || ELF_ST_BIND(sym.sym.st_info) == STB_WEAK) {
+        if (!sym.sym.st_value) {
             *val_or_index = sym.index;
             return false;
         } else {
