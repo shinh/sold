@@ -156,6 +156,9 @@ public:
 
     const std::string& name() const { return name_; }
 
+    const std::vector<uintptr_t>& init_array() const { return init_array_; }
+    const std::vector<uintptr_t>& fini_array() const { return fini_array_; }
+
     Range GetRange() const {
         Range range{std::numeric_limits<uintptr_t>::max(), std::numeric_limits<uintptr_t>::min()};
         for (Elf_Phdr* phdr : loads_) {
@@ -263,6 +266,10 @@ private:
             dyns.push_back(dyn);
         }
 
+        uintptr_t* init_array{0};
+        uintptr_t init_arraysz{0};
+        uintptr_t* fini_array{0};
+        uintptr_t fini_arraysz{0};
         for (Elf_Dyn* dyn : dyns) {
             auto get_ptr = [this, dyn]() { return GetPtr(dyn->d_un.d_ptr); };
             if (dyn->d_tag == DT_STRTAB) {
@@ -286,9 +293,24 @@ private:
             } else if (dyn->d_tag == DT_REL || dyn->d_tag == DT_RELSZ || dyn->d_tag == DT_RELENT) {
                 // TODO(hamaji): Support 32bit?
                 CHECK(false);
+            } else if (dyn->d_tag == DT_INIT_ARRAY) {
+                init_array = reinterpret_cast<uintptr_t*>(get_ptr());
+            } else if (dyn->d_tag == DT_INIT_ARRAYSZ) {
+                init_arraysz = dyn->d_un.d_val;
+            } else if (dyn->d_tag == DT_FINI_ARRAY) {
+                init_array = reinterpret_cast<uintptr_t*>(get_ptr());
+            } else if (dyn->d_tag == DT_FINI_ARRAYSZ) {
+                init_arraysz = dyn->d_un.d_val;
+            } else if (dyn->d_tag == DT_INIT) {
+                // TODO(hamaji): Support?
+            } else if (dyn->d_tag == DT_FINI) {
+                // TODO(hamaji): Support?
             }
         }
         CHECK(strtab_);
+
+        ParseFuncArray(init_array, init_arraysz, &init_array_);
+        ParseFuncArray(fini_array, fini_arraysz, &fini_array_);
 
         for (Elf_Dyn* dyn : dyns) {
             if (dyn->d_tag == DT_NEEDED) {
@@ -301,6 +323,13 @@ private:
             } else if (dyn->d_tag == DT_RPATH) {
                 rpath_ = strtab_ + dyn->d_un.d_val;
             }
+        }
+    }
+
+    void ParseFuncArray(uintptr_t* array, uintptr_t size,
+                        std::vector<uintptr_t>* out) {
+        for (size_t i = 0; i < size; ++i) {
+            out->push_back(array[i]);
         }
     }
 
@@ -336,6 +365,9 @@ private:
     size_t num_plt_rels_{0};
 
     Elf_GnuHash* gnu_hash_{nullptr};
+
+    std::vector<uintptr_t> init_array_;
+    std::vector<uintptr_t> fini_array_;
 
     std::string name_;
     std::map<std::string, Elf_Sym*> syms_;
@@ -515,6 +547,7 @@ public:
 
     void Link(const std::string& out_filename) {
         DecideOffsets();
+        CollectArrays();
         CollectSymbols();
         Relocate();
 
@@ -564,6 +597,7 @@ private:
         EmitSymtab(fp);
         EmitStrtab(fp);
         EmitRel(fp);
+        EmitArrays(fp);
         EmitDynamic(fp);
         EmitAlign(fp);
 
@@ -591,8 +625,16 @@ private:
         return StrtabOffset() + strtab_.size();
     }
 
-    uintptr_t DynamicOffset() const {
+    uintptr_t InitArrayOffset() const {
         return RelOffset() + rels_.size() * sizeof(Elf_Rel);
+    }
+
+    uintptr_t FiniArrayOffset() const {
+        return InitArrayOffset() + sizeof(uintptr_t) * init_array_.size();
+    }
+
+    uintptr_t DynamicOffset() const {
+        return FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size();
     }
 
     void BuildEhdr() {
@@ -636,6 +678,11 @@ private:
         if (main_binary_->runpath().empty()) {
             MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath()));
         }
+
+        MakeDyn(DT_INIT_ARRAY, InitArrayOffset());
+        MakeDyn(DT_INIT_ARRAYSZ, init_array_.size());
+        MakeDyn(DT_FINI_ARRAY, FiniArrayOffset());
+        MakeDyn(DT_FINI_ARRAYSZ, fini_array_.size());
 
         MakeDyn(DT_STRTAB, StrtabOffset());
         MakeDyn(DT_STRSZ, strtab_.size());
@@ -721,6 +768,17 @@ private:
         }
     }
 
+    void EmitArrays(FILE* fp) {
+        CHECK(ftell(fp) == InitArrayOffset());
+        for (uintptr_t ptr : init_array_) {
+            Write(fp, ptr);
+        }
+        CHECK(ftell(fp) == FiniArrayOffset());
+        for (uintptr_t ptr : fini_array_) {
+            Write(fp, ptr);
+        }
+    }
+
     void EmitDynamic(FILE* fp) {
         CHECK(ftell(fp) == DynamicOffset());
         for (const Elf_Dyn& dyn : dynamic_) {
@@ -750,6 +808,22 @@ private:
             LOGF("Assigned: %s %08lx-%08lx\n",
                  bin->soname().c_str(), range.start, range.end);
             offset = range.end;
+        }
+    }
+
+    void CollectArrays() {
+        for (auto iter = link_binaries_.rbegin(); iter != link_binaries_.rend(); ++iter) {
+            ELFBinary* bin = *iter;
+            uintptr_t offset = offsets_[bin];
+            for (uintptr_t ptr : bin->init_array()) {
+                init_array_.push_back(ptr + offset);
+            }
+        }
+        for (ELFBinary* bin : link_binaries_) {
+            uintptr_t offset = offsets_[bin];
+            for (uintptr_t ptr : bin->fini_array()) {
+                fini_array_.push_back(ptr + offset);
+            }
         }
     }
 
@@ -963,6 +1037,8 @@ private:
     StrtabBuilder strtab_;
     Elf_Ehdr ehdr_;
     std::vector<Elf_Dyn> dynamic_;
+    std::vector<uintptr_t> init_array_;
+    std::vector<uintptr_t> fini_array_;
 };
 
 int main(int argc, const char* argv[]) {
