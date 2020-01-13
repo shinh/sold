@@ -18,3 +18,7 @@ int in_both_lib_and_base() {
     printf("called %s\n", __func__);
     return 100;
 }
+
+void lib_use_stderr() {
+    fprintf(stderr, "Use stderr from base\n");
+}

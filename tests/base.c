@@ -17,3 +17,7 @@ int in_both_lib_and_base() {
     fprintf(stderr, "Must have been overriden\n");
     abort();
 }
+
+void base_use_stderr() {
+    fprintf(stderr, "Use stderr from base\n");
+}

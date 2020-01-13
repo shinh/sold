@@ -446,7 +446,35 @@ public:
             *val_or_index = sym.sym.st_value;
             return true;
         }
+    }
 
+    uintptr_t ResolveCopy(const std::string& name) {
+        // TODO(hamaji): Refactor.
+        Symbol sym{};
+        sym.sym.st_name = 0;
+        sym.sym.st_info = 0;
+        sym.sym.st_other = 0;
+        sym.sym.st_shndx = 0;
+        sym.sym.st_value = 0;
+        sym.sym.st_size = 0;
+
+        auto found = syms_.find(name);
+        if (found != syms_.end()) {
+            sym = found->second;
+        } else {
+            auto found = src_syms_.find(name);
+            if (found != src_syms_.end()) {
+                LOGF("Symbol %s found for copy\n", name.c_str());
+                sym.sym = *found->second;
+                sym.index = AddSym(name);
+                CHECK(syms_.emplace(name, sym).second);
+            } else {
+                LOGF("Symbol %s not found for copy\n", name.c_str());
+                CHECK(false);
+            }
+        }
+
+        return sym.index;
     }
 
     void Build(StrtabBuilder* strtab) {
@@ -777,6 +805,13 @@ private:
             } else {
                 newrel.r_info = ELF_R_INFO(val_or_index, type);
             }
+            break;
+        }
+
+        case R_X86_64_COPY: {
+            const std::string name = bin->Str(sym->st_name);
+            uintptr_t index = syms_.ResolveCopy(name);
+            newrel.r_info = ELF_R_INFO(index, type);
             break;
         }
 
