@@ -526,6 +526,7 @@ public:
         strtab_.Freeze();
 
         Emit(out_filename);
+        CHECK(chmod(out_filename.c_str(), 0755) == 0);
     }
 
 private:
