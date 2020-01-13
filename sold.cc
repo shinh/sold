@@ -422,11 +422,15 @@ public:
             auto found = src_syms_.find(name);
             if (found != src_syms_.end()) {
                 sym.sym = *found->second;
-                if (!sym.sym.st_value) {
+                if (sym.sym.st_value) {
+                    LOGF("Symbol %s found\n", name.c_str());
+                } else {
+                    LOGF("Symbol (undef/weak) %s found\n", name.c_str());
                     sym.index = AddSym(name);
                     CHECK(syms_.emplace(name, sym).second);
                 }
             } else {
+                LOGF("Symbol %s not found\n", name.c_str());
                 sym.index = AddSym(name);
                 CHECK(syms_.emplace(name, sym).second);
             }
