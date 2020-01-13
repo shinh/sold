@@ -156,6 +156,8 @@ public:
 
     const std::string& name() const { return name_; }
 
+    uintptr_t init() const { return init_; }
+    uintptr_t fini() const { return fini_; }
     const std::vector<uintptr_t>& init_array() const { return init_array_; }
     const std::vector<uintptr_t>& fini_array() const { return fini_array_; }
 
@@ -302,9 +304,9 @@ private:
             } else if (dyn->d_tag == DT_FINI_ARRAYSZ) {
                 init_arraysz = dyn->d_un.d_val;
             } else if (dyn->d_tag == DT_INIT) {
-                // TODO(hamaji): Support?
+                init_ = dyn->d_un.d_ptr;
             } else if (dyn->d_tag == DT_FINI) {
-                // TODO(hamaji): Support?
+                fini_ = dyn->d_un.d_ptr;
             }
         }
         CHECK(strtab_);
@@ -366,6 +368,8 @@ private:
 
     Elf_GnuHash* gnu_hash_{nullptr};
 
+    uintptr_t init_;
+    uintptr_t fini_;
     std::vector<uintptr_t> init_array_;
     std::vector<uintptr_t> fini_array_;
 
