@@ -4,6 +4,20 @@
 
 #include "base.h"
 
+static int g_init;
+__attribute__((constructor)) static void init() {
+    puts("Constructor in lib");
+    g_init = 43;
+}
+
+__attribute__((destructor)) static void quit() {
+    puts("Destructor in lib");
+}
+
+int lib_init_value() {
+    return g_init;
+}
+
 int lib_42() {
     printf("called %s\n", __func__);
     return 42;

@@ -6,12 +6,12 @@
 
 static int g_init;
 __attribute__((constructor)) static void init() {
-    puts("Constructor");
+    puts("Constructor in exe");
     g_init = 42;
 }
 
 __attribute__((destructor)) static void quit() {
-    puts("Destructor");
+    puts("Destructor in exe");
 }
 
 int main() {

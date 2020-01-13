@@ -3,6 +3,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static int g_init;
+__attribute__((constructor)) static void init() {
+    puts("Constructor in base");
+    g_init = 44;
+}
+
+__attribute__((destructor)) static void quit() {
+    puts("Destructor in base");
+}
+
+int base_init_value() {
+    return g_init;
+}
+
 int base_42() {
     printf("called %s\n", __func__);
     return 42;
