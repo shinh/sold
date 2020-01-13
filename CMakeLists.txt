@@ -22,3 +22,10 @@ add_custom_command(
   DEPENDS test_exe
   )
 add_custom_target(test_link ALL DEPENDS tests/out)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out_stamp
+  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out
+  DEPENDS test_link
+  )
+add_custom_target(run_test_out ALL DEPENDS tests/test_out_stamp)
