@@ -476,6 +476,7 @@ class Sold {
 public:
     Sold(const std::string& elf_filename) {
         main_binary_ = ReadELF(elf_filename);
+        link_binaries_.push_back(main_binary_.get());
 
         InitLdLibraryPaths();
         ResolveLibraryPaths(main_binary_.get());
@@ -710,19 +711,9 @@ private:
     void DecideOffsets() {
         // TODO(hamaji): Use actual size of the headers.
         uintptr_t offset = 0x1000;
-        link_binaries_.push_back(main_binary_.get());
-        offsets_.emplace(main_binary_.get(), offset);
-        Range main_range = main_binary_->GetRange();
-        offset = main_range.end;
-        for (const auto& p : libraries_) {
-            ELFBinary* bin = p.second.get();
-            if (!ShouldLink(bin->soname())) {
-                continue;
-            }
-
+        for (ELFBinary* bin : link_binaries_) {
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
-            link_binaries_.push_back(bin);
             offsets_.emplace(bin, range.start);
             LOGF("Assigned: %s %08lx-%08lx\n",
                  bin->soname().c_str(), range.start, range.end);
@@ -886,6 +877,9 @@ private:
             if (!library) {
                 LOGF("Library %s not found\n", needed.c_str());
                 abort();
+            }
+            if (ShouldLink(library->soname())) {
+                link_binaries_.push_back(library.get());
             }
 
             LOGF("Loaded: %s => %s\n",
