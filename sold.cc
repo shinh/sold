@@ -149,6 +149,8 @@ public:
     const Elf_Sym* symtab() const { return symtab_; }
     const Elf_Rel* rel() const { return rel_; }
     size_t num_rels() const { return num_rels_; }
+    const Elf_Rel* plt_rel() const { return plt_rel_; }
+    size_t num_plt_rels() const { return num_plt_rels_; }
 
     const char* head() const { return head_; }
 
@@ -270,8 +272,14 @@ private:
                 rel_ = reinterpret_cast<Elf_Rel*>(get_ptr());
             } else if (dyn->d_tag == DT_RELASZ) {
                 num_rels_ = dyn->d_un.d_val / sizeof(Elf_Rel);
-            } else if (dyn->d_tag == DT_RELAENT) {
-                CHECK(sizeof(Elf_Rel) == dyn->d_un.d_val);
+            } else if (dyn->d_tag == DT_JMPREL) {
+                plt_rel_ = reinterpret_cast<Elf_Rel*>(get_ptr());
+            } else if (dyn->d_tag == DT_PLTRELSZ) {
+                num_plt_rels_ = dyn->d_un.d_val / sizeof(Elf_Rel);
+            } else if (dyn->d_tag == DT_PLTREL) {
+                CHECK(dyn->d_un.d_val == DT_RELA);
+            } else if (dyn->d_tag == DT_PLTREL) {
+                // TODO(hamaji): Check
             } else if (dyn->d_tag == DT_REL || dyn->d_tag == DT_RELSZ || dyn->d_tag == DT_RELENT) {
                 // TODO(hamaji): Support 32bit?
                 CHECK(false);
@@ -321,6 +329,8 @@ private:
 
     Elf_Rel* rel_{nullptr};
     size_t num_rels_{0};
+    Elf_Rel* plt_rel_{nullptr};
+    size_t num_plt_rels_{0};
 
     Elf_GnuHash* gnu_hash_{nullptr};
 
@@ -733,11 +743,15 @@ private:
     void RelocateBinary(ELFBinary* bin) {
         CHECK(bin->symtab());
         CHECK(bin->rel());
+        RelocateSymbols(bin, bin->rel(), bin->num_rels());
+        RelocateSymbols(bin, bin->plt_rel(), bin->num_plt_rels());
+    }
+
+    void RelocateSymbols(ELFBinary* bin, const Elf_Rel* rels, size_t num) {
         uintptr_t offset = offsets_[bin];
-        for (size_t i = 0; i < bin->num_rels(); ++i) {
-            const Elf_Rel* rel = &bin->rel()[i];
+        for (size_t i = 0; i < num; ++i) {
             // TODO(hamaji): Support non-x86-64 architectures.
-            RelocateSymbol_x86_64(bin, rel, offset);
+            RelocateSymbol_x86_64(bin, &rels[i], offset);
         }
     }
 
@@ -758,6 +772,18 @@ private:
         }
 
         case R_X86_64_GLOB_DAT: {
+            uintptr_t val_or_index;
+            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                *reinterpret_cast<uintptr_t*>(target) = val_or_index + addend;
+                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                newrel.r_addend = 0;
+            } else {
+                newrel.r_info = ELF_R_INFO(val_or_index, type);
+            }
+            break;
+        }
+
+        case R_X86_64_JUMP_SLOT: {
             uintptr_t val_or_index;
             if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
                 *reinterpret_cast<uintptr_t*>(target) = val_or_index + addend;
