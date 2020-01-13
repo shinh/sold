@@ -753,7 +753,7 @@ private:
 
         switch (type) {
         case R_X86_64_RELATIVE: {
-            *reinterpret_cast<uintptr_t*>(target) += offset;
+            newrel.r_addend += offset;
             break;
         }
 
