@@ -40,3 +40,7 @@ int in_both_lib_and_base() {
 void lib_use_stderr() {
     fprintf(stderr, "Use stderr from lib\n");
 }
+
+int lib_base_global() {
+    return base_global;
+}

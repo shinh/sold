@@ -35,3 +35,5 @@ int in_both_lib_and_base() {
 void base_use_stderr() {
     fprintf(stderr, "Use stderr from base\n");
 }
+
+int base_global = 98;

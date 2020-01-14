@@ -30,5 +30,7 @@ int main(int argc, char** argv) {
         puts("Constructors are OK");
     }
 
+    if (lib_base_global() != 98) abort();
+
     puts("OK");
 }
