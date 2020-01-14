@@ -933,6 +933,7 @@ private:
                  bin->soname().c_str(), range.start, range.end);
             offset = range.end;
         }
+        shdr_offset_ = offset;
     }
 
     void CollectArrays() {
@@ -1166,6 +1167,7 @@ private:
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
+    uintptr_t shdr_offset_{0};
     bool is_executable_{false};
 
     uintptr_t interp_offset_;
