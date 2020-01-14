@@ -744,6 +744,10 @@ private:
                 load.emit.p_paddr += offset;
                 // TODO(hamaji): Add PF_W only for GOT.
                 load.emit.p_flags |= PF_W;
+                // TODO(hamaji): Check if this is really safe.
+                if (load.emit.p_align > 0x1000) {
+                    load.emit.p_align = 0x1000;
+                }
                 loads_.push_back(load);
             }
         }
