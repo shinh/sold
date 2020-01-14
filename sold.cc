@@ -238,7 +238,13 @@ public:
                 return phdr;
             }
         }
-        CHECK(false);
+        return nullptr;
+    }
+
+    const Elf_Phdr& GetPhdr(uint64_t type) {
+        Elf_Phdr* phdr = FindPhdr(type);
+        CHECK(phdr);
+        return *phdr;
     }
 
 private:
@@ -661,7 +667,7 @@ private:
     }
 
     void BuildInterp() {
-        const std::string interp = main_binary_->head() + main_binary_->FindPhdr(PT_INTERP)->p_offset;
+        const std::string interp = main_binary_->head() + main_binary_->GetPhdr(PT_INTERP).p_offset;
         LOGF("Interp: %s\n", interp.c_str());
         interp_offset_ = AddStr(interp);
     }
@@ -733,8 +739,8 @@ private:
         std::vector<Elf_Phdr> phdrs;
 
         CHECK(main_binary_->phdrs().size() > 2);
-        phdrs.push_back(*main_binary_->FindPhdr(PT_PHDR));
-        phdrs.push_back(*main_binary_->FindPhdr(PT_INTERP));
+        phdrs.push_back(main_binary_->GetPhdr(PT_PHDR));
+        phdrs.push_back(main_binary_->GetPhdr(PT_INTERP));
         phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = StrtabOffset() + interp_offset_;
 
         size_t dyn_start = DynamicOffset();
@@ -742,7 +748,7 @@ private:
         size_t seg_start = AlignNext(dyn_start + dyn_size);
 
         {
-            Elf_Phdr phdr = *main_binary_->FindPhdr(PT_LOAD);
+            Elf_Phdr phdr = main_binary_->GetPhdr(PT_LOAD);
             phdr.p_offset = 0;
             phdr.p_flags = PF_R | PF_W;
             phdr.p_vaddr = 0;
@@ -752,7 +758,7 @@ private:
             phdrs.push_back(phdr);
         }
         {
-            Elf_Phdr phdr = *main_binary_->FindPhdr(PT_DYNAMIC);
+            Elf_Phdr phdr = main_binary_->GetPhdr(PT_DYNAMIC);
             phdr.p_offset = dyn_start;
             phdr.p_flags = PF_R | PF_W;
             phdr.p_vaddr = dyn_start;
@@ -1064,6 +1070,7 @@ private:
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
+    bool is_executable_{false};
 
     uintptr_t interp_offset_;
     SymtabBuilder syms_;
