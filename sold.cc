@@ -163,6 +163,8 @@ public:
     const std::vector<uintptr_t>& init_array() const { return init_array_; }
     const std::vector<uintptr_t>& fini_array() const { return fini_array_; }
 
+    const std::map<std::string, Elf_Sym*>& GetSymbolMap() const { return syms_; }
+
     Range GetRange() const {
         Range range{std::numeric_limits<uintptr_t>::max(), std::numeric_limits<uintptr_t>::min()};
         for (Elf_Phdr* phdr : loads_) {
@@ -531,8 +533,20 @@ public:
         }
     }
 
+    void AddPublicSymbol(const std::string& name, Elf_Sym sym) {
+        public_syms_.emplace(name, sym);
+    }
+
+    void MergePublicSymbols() {
+        for (const auto& p : public_syms_) {
+            sym_names_.push_back(p.first);
+            symtab_.push_back(p.second);
+        }
+        public_syms_.clear();
+    }
+
     uintptr_t size() const {
-        return symtab_.size();
+        return symtab_.size() + public_syms_.size();
     }
 
     const std::vector<Elf_Sym>& Get() {
@@ -545,6 +559,7 @@ private:
 
     std::vector<std::string> sym_names_;
     std::vector<Elf_Sym> symtab_;
+    std::map<std::string, Elf_Sym> public_syms_;
 };
 
 class Sold {
@@ -562,9 +577,11 @@ public:
         DecideOffsets();
         CollectArrays();
         CollectSymbols();
+        CopyPublicSymbols();
         Relocate();
 
         syms_.Build(&strtab_);
+        syms_.MergePublicSymbols();
         BuildEhdr();
         if (is_executable_) {
             BuildInterp();
@@ -878,6 +895,16 @@ private:
             bin->LoadDynSymtab(offsets_[bin], &syms);
         }
         syms_.SetSrcSyms(syms);
+    }
+
+    void CopyPublicSymbols() {
+        for (const auto& p : main_binary_->GetSymbolMap()) {
+            const Elf_Sym* sym = p.second;
+            if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && sym->st_value) {
+                LOGF("Copy public symbol %s\n", p.first.c_str());
+                syms_.AddPublicSymbol(p.first, *sym);
+            }
+        }
     }
 
     void Relocate() {
