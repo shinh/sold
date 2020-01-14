@@ -1033,6 +1033,18 @@ private:
             break;
         }
 
+        case R_X86_64_DTPMOD64:
+        case R_X86_64_DTPOFF64: {
+            uintptr_t val_or_index;
+            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                // TODO(hamaji): Implement this.
+                CHECK(false);
+            } else {
+                newrel.r_info = ELF_R_INFO(val_or_index, type);
+            }
+            break;
+        }
+
         case R_X86_64_COPY: {
             const std::string name = bin->Str(sym->st_name);
             uintptr_t index = syms_.ResolveCopy(name);
