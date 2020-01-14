@@ -8,3 +8,4 @@ int lib_init_value();
 int lib_base_init_value();
 int lib_base_global();
 int lib_base_vf();
+int lib_base_thread_var();

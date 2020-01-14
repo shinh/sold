@@ -15,3 +15,4 @@ public:
 
 Base* MakeBase();
 
+int base_thread_var();

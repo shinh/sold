@@ -56,3 +56,7 @@ int lib_base_vf() {
     std::unique_ptr<Base> base(MakeBase());
     return base->vf();
 }
+
+int lib_base_thread_var() {
+    return base_thread_var();
+}

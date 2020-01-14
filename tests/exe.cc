@@ -34,5 +34,7 @@ int main(int argc, char** argv) {
 
     if (lib_base_vf() != 1234) abort();
 
+    if (lib_base_thread_var() != 121) abort();
+
     puts("OK");
 }

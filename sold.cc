@@ -107,8 +107,12 @@ uint32_t CalcGnuHash(const std::string& name) {
     return h;
 }
 
+bool IsTLS(const Elf_Sym& sym) {
+    return ELF_ST_TYPE(sym.st_info) == STT_TLS;
+}
+
 bool IsDefined(const Elf_Sym& sym) {
-    return sym.st_value || ELF_ST_TYPE(sym.st_info) == STT_TLS;
+    return sym.st_value || IsTLS(sym);
 }
 
 }  // namespace
@@ -601,6 +605,17 @@ private:
     Elf_GnuHash gnu_hash_;
 };
 
+struct TLS {
+    struct Data {
+        uint8_t* start;
+        size_t size;
+    };
+
+    std::vector<Data> data;
+    uintptr_t filesz{0};
+    uintptr_t memsz{0};
+};
+
 class Sold {
 public:
     Sold(const std::string& elf_filename) {
@@ -614,6 +629,7 @@ public:
 
     void Link(const std::string& out_filename) {
         DecideOffsets();
+        CollectTLS();
         CollectArrays();
         CollectSymbols();
         CopyPublicSymbols();
@@ -678,11 +694,17 @@ private:
         EmitAlign(fp);
 
         EmitCode(fp);
+        EmitTLS(fp);
         fclose(fp);
     }
 
     size_t CountPhdrs() const {
-        size_t num_phdrs = is_executable_ ? 4 : 2;
+        // DYNAMIC and its LOAD.
+        size_t num_phdrs = 2;
+        // INTERP and PHDR.
+        if (is_executable_) num_phdrs += 2;
+        // TLS and its LOAD.
+        if (tls_.memsz) num_phdrs += 2;
         for (ELFBinary* bin : link_binaries_) {
             num_phdrs += bin->loads().size();
         }
@@ -755,6 +777,7 @@ private:
                 loads_.push_back(load);
             }
         }
+        tls_file_offset_ = file_offset;
     }
 
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
@@ -874,6 +897,23 @@ private:
             phdrs.push_back(load.emit);
         }
 
+        if (tls_.memsz) {
+            Elf_Phdr phdr;
+            phdr.p_offset = tls_file_offset_;
+            phdr.p_vaddr = tls_offset_;
+            phdr.p_paddr = tls_offset_;
+            phdr.p_filesz = tls_.filesz;
+            phdr.p_memsz = tls_.memsz;
+            phdr.p_align = 0x1000;
+            phdr.p_type = PT_TLS;
+            phdr.p_flags = PF_R;
+            phdrs.push_back(phdr);
+            phdr.p_type = PT_LOAD;
+            phdr.p_flags = PF_R | PF_W;
+            phdrs.push_back(phdr);
+        }
+
+        CHECK(phdrs.size() == CountPhdrs());
         for (const Elf_Phdr& phdr : phdrs) {
             Write(fp, phdr);
         }
@@ -951,6 +991,13 @@ private:
         }
     }
 
+    void EmitTLS(FILE* fp) {
+        EmitPad(fp, tls_file_offset_);
+        for (TLS::Data data : tls_.data) {
+            WriteBuf(fp, data.start, data.size);
+        }
+    }
+
     void DecideOffsets() {
         uintptr_t offset = 0x10000000;
         for (ELFBinary* bin : link_binaries_) {
@@ -961,7 +1008,23 @@ private:
                  bin->soname().c_str(), range.start, range.end);
             offset = range.end;
         }
-        shdr_offset_ = offset;
+        tls_offset_ = offset;
+    }
+
+    void CollectTLS() {
+        for (ELFBinary* bin : link_binaries_) {
+            for (Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_TLS) {
+                    uint8_t* start = reinterpret_cast<uint8_t*>(bin->GetPtr(phdr->p_vaddr));
+                    size_t size = phdr->p_filesz;
+                    tls_.data.push_back({start, size});
+                    tls_.memsz += phdr->p_memsz;
+                    tls_.filesz += size;
+                }
+            }
+        }
+        LOGF("TLS: filesz=%lx memsz=%lx cnt=%zu\n",
+             tls_.filesz, tls_.memsz, tls_.data.size());
     }
 
     void CollectArrays() {
@@ -993,9 +1056,19 @@ private:
     void CopyPublicSymbols() {
         for (const auto& p : main_binary_->GetSymbolMap()) {
             const Elf_Sym* sym = p.second;
-            if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && sym->st_value) {
+            if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
                 LOGF("Copy public symbol %s\n", p.first.c_str());
                 syms_.AddPublicSymbol(p.first, *sym);
+            }
+        }
+        for (ELFBinary* bin : link_binaries_) {
+            if (bin == main_binary_.get()) continue;
+            for (const auto& p : bin->GetSymbolMap()) {
+                const Elf_Sym* sym = p.second;
+                if (IsTLS(*sym)) {
+                    LOGF("Copy TLS symbol %s\n", p.first.c_str());
+                    syms_.AddPublicSymbol(p.first, *sym);
+                }
             }
         }
     }
@@ -1060,17 +1133,7 @@ private:
         }
 
         case R_X86_64_DTPMOD64:
-        case R_X86_64_DTPOFF64: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
-                // TODO(hamaji): Implement this.
-                CHECK(false);
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
-            }
-            break;
-        }
-
+        case R_X86_64_DTPOFF64:
         case R_X86_64_COPY: {
             const std::string name = bin->Str(sym->st_name);
             uintptr_t index = syms_.ResolveCopy(name);
@@ -1224,7 +1287,8 @@ private:
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
-    uintptr_t shdr_offset_{0};
+    uintptr_t tls_file_offset_{0};
+    uintptr_t tls_offset_{0};
     bool is_executable_{false};
 
     uintptr_t interp_offset_;
@@ -1236,6 +1300,7 @@ private:
     std::vector<Elf_Dyn> dynamic_;
     std::vector<uintptr_t> init_array_;
     std::vector<uintptr_t> fini_array_;
+    TLS tls_;
 };
 
 int main(int argc, const char* argv[]) {
