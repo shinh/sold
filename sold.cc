@@ -728,6 +728,7 @@ private:
 
     void BuildLoads() {
         uintptr_t file_offset = CodeOffset();
+        CHECK(file_offset < offsets_[main_binary_.get()]);
         for (ELFBinary* bin : link_binaries_) {
             uintptr_t offset = offsets_[bin];
             for (Elf_Phdr* phdr : bin->loads()) {
@@ -942,8 +943,7 @@ private:
     }
 
     void DecideOffsets() {
-        // TODO(hamaji): Use actual size of the headers.
-        uintptr_t offset = 0x2000;
+        uintptr_t offset = 0x10000000;
         for (ELFBinary* bin : link_binaries_) {
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
