@@ -24,6 +24,7 @@ int main(int argc, char** argv) {
     lib_use_stderr();
 
     if (g_init != 42) abort();
+    // TODO(hamaji): Fix .init_array for the main binary.
     if (!is_exe) {
         if (lib_init_value() != 43) abort();
         if (lib_base_init_value() != 44) abort();
