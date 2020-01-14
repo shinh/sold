@@ -779,9 +779,9 @@ private:
         }
 
         MakeDyn(DT_INIT_ARRAY, InitArrayOffset());
-        MakeDyn(DT_INIT_ARRAYSZ, init_array_.size());
+        MakeDyn(DT_INIT_ARRAYSZ, init_array_.size() * sizeof(uintptr_t));
         MakeDyn(DT_FINI_ARRAY, FiniArrayOffset());
-        MakeDyn(DT_FINI_ARRAYSZ, fini_array_.size());
+        MakeDyn(DT_FINI_ARRAYSZ, fini_array_.size() * sizeof(uintptr_t));
 
         MakeDyn(DT_GNU_HASH, GnuHashOffset());
 
