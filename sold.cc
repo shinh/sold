@@ -551,6 +551,7 @@ class Sold {
 public:
     Sold(const std::string& elf_filename) {
         main_binary_ = ReadELF(elf_filename);
+        is_executable_ = main_binary_->FindPhdr(PT_INTERP);
         link_binaries_.push_back(main_binary_.get());
 
         InitLdLibraryPaths();
@@ -565,7 +566,9 @@ public:
 
         syms_.Build(&strtab_);
         BuildEhdr();
-        BuildInterp();
+        if (is_executable_) {
+            BuildInterp();
+        }
         BuildArrays();
         BuildDynamic();
 
@@ -619,7 +622,7 @@ private:
     }
 
     size_t CountPhdrs() const {
-        size_t num_phdrs = 4;
+        size_t num_phdrs = is_executable_ ? 4 : 2;
         for (ELFBinary* bin : link_binaries_) {
             num_phdrs += bin->loads().size();
         }
@@ -739,9 +742,11 @@ private:
         std::vector<Elf_Phdr> phdrs;
 
         CHECK(main_binary_->phdrs().size() > 2);
-        phdrs.push_back(main_binary_->GetPhdr(PT_PHDR));
-        phdrs.push_back(main_binary_->GetPhdr(PT_INTERP));
-        phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = StrtabOffset() + interp_offset_;
+        if (is_executable_) {
+            phdrs.push_back(main_binary_->GetPhdr(PT_PHDR));
+            phdrs.push_back(main_binary_->GetPhdr(PT_INTERP));
+            phdrs[1].p_offset = phdrs[1].p_vaddr = phdrs[1].p_paddr = StrtabOffset() + interp_offset_;
+        }
 
         size_t dyn_start = DynamicOffset();
         size_t dyn_size = sizeof(Elf_Dyn) * dynamic_.size();
