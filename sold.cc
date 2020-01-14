@@ -99,7 +99,15 @@ struct Elf_GnuHash {
     }
 };
 
+uint32_t CalcGnuHash(const std::string& name) {
+    uint32_t h = 5381;
+    for (unsigned char c : name) {
+        h = h * 33 + c;
+    }
+    return h;
 }
+
+}  // namespace
 
 class ELFBinary {
 public:
@@ -537,10 +545,19 @@ public:
         public_syms_.emplace(name, sym);
     }
 
-    void MergePublicSymbols() {
+    void MergePublicSymbols(StrtabBuilder* strtab) {
+        gnu_hash_.nbuckets = 1;
+        CHECK(symtab_.size() <= std::numeric_limits<uint32_t>::max());
+        gnu_hash_.symndx = symtab_.size();
+        gnu_hash_.maskwords = 1;
+        gnu_hash_.shift2 = 1;
+
         for (const auto& p : public_syms_) {
-            sym_names_.push_back(p.first);
-            symtab_.push_back(p.second);
+            const std::string& name = p.first;
+            Elf_Sym sym = p.second;
+            sym.st_name = strtab->Add(name);
+            sym_names_.push_back(name);
+            symtab_.push_back(sym);
         }
         public_syms_.clear();
     }
@@ -549,8 +566,23 @@ public:
         return symtab_.size() + public_syms_.size();
     }
 
+    const Elf_GnuHash& gnu_hash() const { return gnu_hash_; }
+
+    uintptr_t gnu_hash_size() const {
+        CHECK(!symtab_.empty());
+        CHECK(public_syms_.empty());
+        CHECK(gnu_hash_.nbuckets);
+        return (sizeof(uint32_t) * 4 +
+                sizeof(Elf_Addr) +
+                sizeof(uint32_t) * (1 + symtab_.size() - gnu_hash_.symndx));
+    }
+
     const std::vector<Elf_Sym>& Get() {
         return symtab_;
+    }
+
+    const std::vector<std::string>& GetNames() const {
+        return sym_names_;
     }
 
 private:
@@ -560,6 +592,8 @@ private:
     std::vector<std::string> sym_names_;
     std::vector<Elf_Sym> symtab_;
     std::map<std::string, Elf_Sym> public_syms_;
+
+    Elf_GnuHash gnu_hash_;
 };
 
 class Sold {
@@ -581,7 +615,8 @@ public:
         Relocate();
 
         syms_.Build(&strtab_);
-        syms_.MergePublicSymbols();
+        syms_.MergePublicSymbols(&strtab_);
+
         BuildEhdr();
         if (is_executable_) {
             BuildInterp();
@@ -627,6 +662,7 @@ private:
         FILE* fp = fopen(out_filename.c_str(), "wb");
         Write(fp, ehdr_);
         EmitPhdrs(fp);
+        EmitGnuHash(fp);
         EmitSymtab(fp);
         EmitRel(fp);
         EmitArrays(fp);
@@ -646,8 +682,12 @@ private:
         return num_phdrs;
     }
 
-    uintptr_t SymtabOffset() const {
+    uintptr_t GnuHashOffset() const {
         return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
+    }
+
+    uintptr_t SymtabOffset() const {
+        return GnuHashOffset() + syms_.gnu_hash_size();
     }
 
     uintptr_t RelOffset() const {
@@ -742,6 +782,8 @@ private:
         MakeDyn(DT_FINI_ARRAY, FiniArrayOffset());
         MakeDyn(DT_FINI_ARRAYSZ, fini_array_.size());
 
+        MakeDyn(DT_GNU_HASH, GnuHashOffset());
+
         MakeDyn(DT_STRTAB, StrtabOffset());
         MakeDyn(DT_STRSZ, strtab_.size());
 
@@ -806,6 +848,28 @@ private:
 
         for (const Elf_Phdr& phdr : phdrs) {
             Write(fp, phdr);
+        }
+    }
+
+    void EmitGnuHash(FILE* fp) {
+        CHECK(ftell(fp) == GnuHashOffset());
+        const Elf_GnuHash& gnu_hash = syms_.gnu_hash();
+        Write(fp, gnu_hash.nbuckets);
+        Write(fp, gnu_hash.symndx);
+        Write(fp, gnu_hash.maskwords);
+        Write(fp, gnu_hash.shift2);
+        Elf_Addr bloom_filter = -1;
+        Write(fp, bloom_filter);
+        uint32_t bucket = 0;
+        Write(fp, bucket);
+
+        const std::vector<std::string>& sym_names = syms_.GetNames();
+        for (size_t i = gnu_hash.symndx; i < sym_names.size(); ++i) {
+            uint32_t h = CalcGnuHash(sym_names[i]) << 1;
+            if (i == sym_names.size() - 1) {
+                h |= 1;
+            }
+            Write(fp, h);
         }
     }
 
