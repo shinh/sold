@@ -661,6 +661,7 @@ private:
 
     void Emit(const std::string& out_filename) {
         FILE* fp = fopen(out_filename.c_str(), "wb");
+        CHECK(fp);
         Write(fp, ehdr_);
         EmitPhdrs(fp);
         EmitGnuHash(fp);
@@ -1011,6 +1012,17 @@ private:
 
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT: {
+            uintptr_t val_or_index;
+            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                newrel.r_addend = val_or_index;
+            } else {
+                newrel.r_info = ELF_R_INFO(val_or_index, type);
+            }
+            break;
+        }
+
+        case R_X86_64_64: {
             uintptr_t val_or_index;
             if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
                 newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);

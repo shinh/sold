@@ -7,3 +7,4 @@ void lib_use_stderr();
 int lib_init_value();
 int lib_base_init_value();
 int lib_base_global();
+int lib_base_vf();

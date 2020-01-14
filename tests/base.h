@@ -6,3 +6,12 @@ void base_use_stderr();
 int base_init_value();
 
 extern int base_global;
+
+class Base {
+public:
+    virtual ~Base() {}
+    virtual int vf() = 0;
+};
+
+Base* MakeBase();
+
