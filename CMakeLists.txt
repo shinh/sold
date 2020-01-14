@@ -16,12 +16,12 @@ add_executable(
 add_subdirectory(tests)
 
 add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/out
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out
   COMMAND ${CMAKE_CURRENT_BINARY_DIR}/sold ${CMAKE_CURRENT_BINARY_DIR}/tests/test_exe ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out
   MAIN_DEPENDENCY sold
   DEPENDS test_exe
   )
-add_custom_target(test_link ALL DEPENDS tests/out)
+add_custom_target(test_link ALL DEPENDS tests/test_out)
 
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out_stamp
