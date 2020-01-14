@@ -13,4 +13,4 @@ sotest="${out}/sotest"
 mkdir -p "${sotest}"
 ./sold tests/libtest_lib.so "${sotest}/libtest_lib.so"
 cp tests/test_exe "${sotest}/test_exe"
-"${sotest}/test_exe"
+"${sotest}/test_exe" lib

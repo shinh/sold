@@ -18,6 +18,10 @@ int lib_init_value() {
     return g_init;
 }
 
+int lib_base_init_value() {
+    return base_init_value();
+}
+
 int lib_42() {
     printf("called %s\n", __func__);
     return 42;
