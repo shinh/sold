@@ -556,6 +556,7 @@ public:
             const std::string& name = p.first;
             Elf_Sym sym = p.second;
             sym.st_name = strtab->Add(name);
+            sym.st_shndx = 0;
             sym_names_.push_back(name);
             symtab_.push_back(sym);
         }
