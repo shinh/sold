@@ -34,5 +34,5 @@ int in_both_lib_and_base() {
 }
 
 void lib_use_stderr() {
-    fprintf(stderr, "Use stderr from base\n");
+    fprintf(stderr, "Use stderr from lib\n");
 }
