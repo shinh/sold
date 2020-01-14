@@ -860,7 +860,7 @@ private:
         Write(fp, gnu_hash.shift2);
         Elf_Addr bloom_filter = -1;
         Write(fp, bloom_filter);
-        uint32_t bucket = 0;
+        uint32_t bucket = gnu_hash.symndx;
         Write(fp, bucket);
 
         const std::vector<std::string>& sym_names = syms_.GetNames();
