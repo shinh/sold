@@ -866,7 +866,7 @@ private:
 
         const std::vector<std::string>& sym_names = syms_.GetNames();
         for (size_t i = gnu_hash.symndx; i < sym_names.size(); ++i) {
-            uint32_t h = CalcGnuHash(sym_names[i]) << 1;
+            uint32_t h = CalcGnuHash(sym_names[i]) & ~1;
             if (i == sym_names.size() - 1) {
                 h |= 1;
             }
