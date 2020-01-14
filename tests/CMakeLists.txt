@@ -1,8 +1,8 @@
 set(CMAKE_SKIP_RPATH ON)
 
-add_library(test_base SHARED base.c)
+add_library(test_base SHARED base.cc)
 
-add_library(test_lib SHARED lib.c)
+add_library(test_lib SHARED lib.cc)
 target_link_libraries(
   test_lib
   PRIVATE
@@ -10,7 +10,7 @@ target_link_libraries(
   "-Wl,-R,'$$ORIGIN'"
   )
 
-add_executable(test_exe exe.c)
+add_executable(test_exe exe.cc)
 target_link_libraries(
   test_exe
   test_lib
