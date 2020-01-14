@@ -368,8 +368,8 @@ private:
 
     Elf_GnuHash* gnu_hash_{nullptr};
 
-    uintptr_t init_;
-    uintptr_t fini_;
+    uintptr_t init_{0};
+    uintptr_t fini_{0};
     std::vector<uintptr_t> init_array_;
     std::vector<uintptr_t> fini_array_;
 
@@ -681,6 +681,13 @@ private:
         }
         if (main_binary_->runpath().empty()) {
             MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath()));
+        }
+
+        if (uintptr_t ptr = main_binary_->init()) {
+            MakeDyn(DT_INIT, ptr + offsets_[main_binary_.get()]);
+        }
+        if (uintptr_t ptr = main_binary_->fini()) {
+            MakeDyn(DT_FINI, ptr + offsets_[main_binary_.get()]);
         }
 
         MakeDyn(DT_INIT_ARRAY, InitArrayOffset());
