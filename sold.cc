@@ -727,6 +727,7 @@ private:
     }
 
     void BuildLoads() {
+        uintptr_t file_offset = CodeOffset();
         for (ELFBinary* bin : link_binaries_) {
             uintptr_t offset = offsets_[bin];
             for (Elf_Phdr* phdr : bin->loads()) {
@@ -735,7 +736,9 @@ private:
                 load.orig = phdr;
                 load.emit = *phdr;
 
-                load.emit.p_offset += offset;
+                file_offset += phdr->p_vaddr & 0xfff;
+                load.emit.p_offset = file_offset;
+                file_offset = AlignNext(file_offset + phdr->p_filesz);
                 load.emit.p_vaddr += offset;
                 load.emit.p_paddr += offset;
                 // TODO(hamaji): Add PF_W only for GOT.
@@ -927,16 +930,14 @@ private:
     }
 
     void EmitCode(FILE* fp) {
-        for (ELFBinary* bin : link_binaries_) {
-            for (Elf_Phdr* phdr : bin->loads()) {
-                LOGF("Emitting code of %s from %lx => %lx (vma=%lx)\n",
-                     bin->name().c_str(), ftell(fp),
-                     offsets_[bin] + phdr->p_offset,
-                     phdr->p_vaddr);
-                EmitPad(fp, offsets_[bin] + phdr->p_offset);
-                WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
-            }
-            EmitAlign(fp);
+        for (const Load& load : loads_) {
+            ELFBinary* bin = load.bin;
+            Elf_Phdr* phdr = load.orig;
+            LOGF("Emitting code of %s from %lx => %lx\n",
+                 bin->name().c_str(), ftell(fp),
+                 load.emit.p_offset);
+            EmitPad(fp, load.emit.p_offset);
+            WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
         }
     }
 
