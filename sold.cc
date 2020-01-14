@@ -107,6 +107,10 @@ uint32_t CalcGnuHash(const std::string& name) {
     return h;
 }
 
+bool IsDefined(const Elf_Sym& sym) {
+    return sym.st_value || ELF_ST_TYPE(sym.st_info) == STT_TLS;
+}
+
 }  // namespace
 
 class ELFBinary {
@@ -225,8 +229,8 @@ public:
             auto inserted = symtab->emplace(name, sym);
             if (!inserted.second) {
                 Elf_Sym* sym2 = inserted.first->second;
-                int prio = sym->st_value ? 2 : ELF_ST_BIND(sym->st_info) == STB_WEAK;
-                int prio2 = sym2->st_value ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
+                int prio = IsDefined(*sym) ? 2 : ELF_ST_BIND(sym->st_info) == STB_WEAK;
+                int prio2 = IsDefined(*sym2) ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
                 if (prio > prio2) {
                     inserted.first->second = sym;
                 }
@@ -479,7 +483,7 @@ public:
             auto found = src_syms_.find(name);
             if (found != src_syms_.end()) {
                 sym.sym = *found->second;
-                if (sym.sym.st_value) {
+                if (IsDefined(sym.sym)) {
                     LOGF("Symbol %s found\n", name.c_str());
                 } else {
                     LOGF("Symbol (undef/weak) %s found\n", name.c_str());

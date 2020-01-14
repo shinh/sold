@@ -48,3 +48,8 @@ public:
 Base* MakeBase() {
     new BaseImpl();
 }
+
+__thread int g_base_thread_var = 121;
+int base_thread_var() {
+    return g_base_thread_var;
+}
