@@ -938,9 +938,10 @@ private:
         for (const Load& load : loads_) {
             ELFBinary* bin = load.bin;
             Elf_Phdr* phdr = load.orig;
-            LOGF("Emitting code of %s from %lx => %lx\n",
+            LOGF("Emitting code of %s from %lx => %lx +%lx\n",
                  bin->name().c_str(), ftell(fp),
-                 load.emit.p_offset);
+                 load.emit.p_offset,
+                 phdr->p_filesz);
             EmitPad(fp, load.emit.p_offset);
             WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
         }
