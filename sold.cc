@@ -12,7 +12,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -64,8 +66,8 @@ bool HasPrefix(const std::string& str, const std::string& prefix) {
     return size_diff >= 0 && str.substr(0, prefix.size()) == prefix;
 }
 
-uintptr_t AlignNext(uintptr_t a) {
-    return (a + 4095) & ~4095;
+uintptr_t AlignNext(uintptr_t a, uintptr_t mask = 4095) {
+    return (a + mask) & ~mask;
 }
 
 struct Range {
@@ -300,9 +302,9 @@ private:
             } else if (dyn->d_tag == DT_INIT_ARRAYSZ) {
                 init_arraysz = dyn->d_un.d_val;
             } else if (dyn->d_tag == DT_FINI_ARRAY) {
-                init_array = reinterpret_cast<uintptr_t*>(get_ptr());
+                fini_array = reinterpret_cast<uintptr_t*>(get_ptr());
             } else if (dyn->d_tag == DT_FINI_ARRAYSZ) {
-                init_arraysz = dyn->d_un.d_val;
+                fini_arraysz = dyn->d_un.d_val;
             } else if (dyn->d_tag == DT_INIT) {
                 init_ = dyn->d_un.d_ptr;
             } else if (dyn->d_tag == DT_FINI) {
@@ -330,7 +332,7 @@ private:
 
     void ParseFuncArray(uintptr_t* array, uintptr_t size,
                         std::vector<uintptr_t>* out) {
-        for (size_t i = 0; i < size; ++i) {
+        for (size_t i = 0; i < size / sizeof(uintptr_t); ++i) {
             out->push_back(array[i]);
         }
     }
@@ -558,6 +560,7 @@ public:
         syms_.Build(&strtab_);
         BuildEhdr();
         BuildInterp();
+        BuildArrays();
         BuildDynamic();
 
         strtab_.Freeze();
@@ -599,9 +602,9 @@ private:
         Write(fp, ehdr_);
         EmitPhdrs(fp);
         EmitSymtab(fp);
-        EmitStrtab(fp);
         EmitRel(fp);
         EmitArrays(fp);
+        EmitStrtab(fp);
         EmitDynamic(fp);
         EmitAlign(fp);
 
@@ -621,24 +624,24 @@ private:
         return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
     }
 
-    uintptr_t StrtabOffset() const {
+    uintptr_t RelOffset() const {
         return SymtabOffset() + syms_.size() * sizeof(Elf_Sym);
     }
 
-    uintptr_t RelOffset() const {
-        return StrtabOffset() + strtab_.size();
-    }
-
     uintptr_t InitArrayOffset() const {
-        return RelOffset() + rels_.size() * sizeof(Elf_Rel);
+        return AlignNext(RelOffset() + rels_.size() * sizeof(Elf_Rel), 7);
     }
 
     uintptr_t FiniArrayOffset() const {
         return InitArrayOffset() + sizeof(uintptr_t) * init_array_.size();
     }
 
-    uintptr_t DynamicOffset() const {
+    uintptr_t StrtabOffset() const {
         return FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size();
+    }
+
+    uintptr_t DynamicOffset() const {
+        return StrtabOffset() + strtab_.size();
     }
 
     void BuildEhdr() {
@@ -661,6 +664,24 @@ private:
         const std::string interp = main_binary_->head() + main_binary_->FindPhdr(PT_INTERP)->p_offset;
         LOGF("Interp: %s\n", interp.c_str());
         interp_offset_ = AddStr(interp);
+    }
+
+    void BuildArrays() {
+        size_t orig_rel_size = rels_.size();
+        for (size_t i = 0; i < init_array_.size() + fini_array_.size(); ++i) {
+            rels_.push_back(Elf_Rel{});
+        }
+
+        std::vector<uintptr_t> array = init_array_;
+        std::copy(fini_array_.begin(), fini_array_.end(), std::back_inserter(array));
+        for (size_t i = 0; i < array.size(); ++i) {
+            size_t rel_index = orig_rel_size + i;
+            CHECK(rel_index < rels_.size());
+            Elf_Rel* rel = &rels_[rel_index];
+            rel->r_offset = InitArrayOffset() + sizeof(uintptr_t) * i;
+            rel->r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+            rel->r_addend = array[i];
+        }
     }
 
     void BuildDynamic() {
@@ -780,7 +801,7 @@ private:
     }
 
     void EmitArrays(FILE* fp) {
-        CHECK(ftell(fp) == InitArrayOffset());
+        EmitPad(fp, InitArrayOffset());
         for (uintptr_t ptr : init_array_) {
             Write(fp, ptr);
         }
@@ -811,7 +832,7 @@ private:
 
     void DecideOffsets() {
         // TODO(hamaji): Use actual size of the headers.
-        uintptr_t offset = 0x1000;
+        uintptr_t offset = 0x2000;
         for (ELFBinary* bin : link_binaries_) {
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
@@ -836,6 +857,8 @@ private:
                 fini_array_.push_back(ptr + offset);
             }
         }
+        LOGF("Array numbers: init_array=%zu fini_array=%zu\n",
+             init_array_.size(), fini_array_.size());
     }
 
     void CollectSymbols() {
