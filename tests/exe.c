@@ -21,7 +21,6 @@ int main() {
 
     fprintf(stderr, "Use stderr from main\n");
     lib_use_stderr();
-    base_use_stderr();
 
     if (g_init != 42) abort();
 
