@@ -626,6 +626,7 @@ public:
         BuildDynamic();
 
         strtab_.Freeze();
+        BuildLoads();
 
         Emit(out_filename);
         CHECK(chmod(out_filename.c_str(), 0755) == 0);
@@ -712,6 +713,10 @@ private:
         return StrtabOffset() + strtab_.size();
     }
 
+    uintptr_t CodeOffset() const {
+        return AlignNext(DynamicOffset() + sizeof(Elf_Dyn) * dynamic_.size());
+    }
+
     void BuildEhdr() {
         ehdr_ = *main_binary_->ehdr();
         ehdr_.e_entry += offsets_[main_binary_.get()];
@@ -719,6 +724,25 @@ private:
         ehdr_.e_shnum = 0;
         ehdr_.e_shstrndx = 0;
         ehdr_.e_phnum = CountPhdrs();
+    }
+
+    void BuildLoads() {
+        for (ELFBinary* bin : link_binaries_) {
+            uintptr_t offset = offsets_[bin];
+            for (Elf_Phdr* phdr : bin->loads()) {
+                Load load;
+                load.bin = bin;
+                load.orig = phdr;
+                load.emit = *phdr;
+
+                load.emit.p_offset += offset;
+                load.emit.p_vaddr += offset;
+                load.emit.p_paddr += offset;
+                // TODO(hamaji): Add PF_W only for GOT.
+                load.emit.p_flags |= PF_W;
+                loads_.push_back(load);
+            }
+        }
     }
 
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
@@ -834,18 +858,8 @@ private:
             phdrs.push_back(phdr);
         }
 
-        for (ELFBinary* bin : link_binaries_) {
-            const bool is_main = bin == main_binary_.get();
-            uintptr_t offset = offsets_[bin];
-            for (Elf_Phdr* phdr : bin->loads()) {
-                Elf_Phdr new_phdr = *phdr;
-                new_phdr.p_offset += offset;
-                new_phdr.p_vaddr += offset;
-                new_phdr.p_paddr += offset;
-                // TODO(hamaji): Add PF_W only for GOT.
-                new_phdr.p_flags |= PF_W;
-                phdrs.push_back(new_phdr);
-            }
+        for (const Load& load : loads_) {
+            phdrs.push_back(load.emit);
         }
 
         for (const Elf_Phdr& phdr : phdrs) {
@@ -914,9 +928,11 @@ private:
 
     void EmitCode(FILE* fp) {
         for (ELFBinary* bin : link_binaries_) {
-            fprintf(stderr, "Emitting code of %s from %lx\n",
-                    bin->name().c_str(), ftell(fp));
             for (Elf_Phdr* phdr : bin->loads()) {
+                LOGF("Emitting code of %s from %lx => %lx (vma=%lx)\n",
+                     bin->name().c_str(), ftell(fp),
+                     offsets_[bin] + phdr->p_offset,
+                     phdr->p_vaddr);
                 EmitPad(fp, offsets_[bin] + phdr->p_offset);
                 WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
             }
@@ -1187,6 +1203,12 @@ private:
         return strtab_.Add(s);
     }
 
+    struct Load {
+        ELFBinary* bin;
+        Elf_Phdr* orig;
+        Elf_Phdr emit;
+    };
+
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
@@ -1200,6 +1222,7 @@ private:
     std::vector<Elf_Rel> rels_;
     StrtabBuilder strtab_;
     Elf_Ehdr ehdr_;
+    std::vector<Load> loads_;
     std::vector<Elf_Dyn> dynamic_;
     std::vector<uintptr_t> init_array_;
     std::vector<uintptr_t> fini_array_;
