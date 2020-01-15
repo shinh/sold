@@ -227,29 +227,6 @@ public:
         }
     }
 
-    void LoadDynSymtab(uintptr_t offset, std::map<std::string, Elf_Sym*>* symtab) {
-        ReadDynSymtab();
-
-        for (const auto& p : syms_) {
-            const std::string& name = p.first;
-            Elf_Sym* sym = p.second;
-            if (sym->st_value && !IsTLS(*sym)) {
-                sym->st_value += offset;
-            }
-            LOGF("Symbol %s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
-
-            auto inserted = symtab->emplace(name, sym);
-            if (!inserted.second) {
-                Elf_Sym* sym2 = inserted.first->second;
-                int prio = IsDefined(*sym) ? 2 : ELF_ST_BIND(sym->st_info) == STB_WEAK;
-                int prio2 = IsDefined(*sym2) ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
-                if (prio > prio2) {
-                    inserted.first->second = sym;
-                }
-            }
-        }
-    }
-
     const char* Str(uintptr_t name) {
         return strtab_ + name;
     }
@@ -1063,9 +1040,34 @@ private:
     void CollectSymbols() {
         std::map<std::string, Elf_Sym*> syms;
         for (ELFBinary* bin : link_binaries_) {
-            bin->LoadDynSymtab(offsets_[bin], &syms);
+            LoadDynSymtab(bin, &syms);
         }
         syms_.SetSrcSyms(syms);
+    }
+
+    void LoadDynSymtab(ELFBinary* bin, std::map<std::string, Elf_Sym*>* symtab) {
+        bin->ReadDynSymtab();
+
+        uintptr_t offset = offsets_[bin];
+
+        for (const auto& p : bin->GetSymbolMap()) {
+            const std::string& name = p.first;
+            Elf_Sym* sym = p.second;
+            if (sym->st_value && !IsTLS(*sym)) {
+                sym->st_value += offset;
+            }
+            LOGF("Symbol %s@%s %08lx\n", name.c_str(), bin->name().c_str(), sym->st_value);
+
+            auto inserted = symtab->emplace(name, sym);
+            if (!inserted.second) {
+                Elf_Sym* sym2 = inserted.first->second;
+                int prio = IsDefined(*sym) ? 2 : ELF_ST_BIND(sym->st_info) == STB_WEAK;
+                int prio2 = IsDefined(*sym2) ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
+                if (prio > prio2) {
+                    inserted.first->second = sym;
+                }
+            }
+        }
     }
 
     void CopyPublicSymbols() {
