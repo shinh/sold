@@ -225,7 +225,7 @@ public:
         for (const auto& p : syms_) {
             const std::string& name = p.first;
             Elf_Sym* sym = p.second;
-            if (sym->st_value) {
+            if (sym->st_value && !IsTLS(*sym)) {
                 sym->st_value += offset;
             }
             LOGF("Symbol %s@%s %08lx\n", name.c_str(), name_.c_str(), sym->st_value);
