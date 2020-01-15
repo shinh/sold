@@ -595,6 +595,7 @@ private:
 
 struct TLS {
     struct Data {
+        ELFBinary* bin;
         uint8_t* start;
         size_t size;
         uintptr_t file_offset;
@@ -602,7 +603,7 @@ struct TLS {
     };
 
     std::vector<Data> data;
-    std::map<ELFBinary*, Data*> data_map;
+    std::map<ELFBinary*, size_t> bin_to_index;
     uintptr_t filesz{0};
     uintptr_t memsz{0};
 };
@@ -1003,18 +1004,30 @@ private:
     }
 
     void CollectTLS() {
+        uintptr_t bss_offset = 0;
         for (ELFBinary* bin : link_binaries_) {
             for (Elf_Phdr* phdr : bin->phdrs()) {
                 if (phdr->p_type == PT_TLS) {
                     uint8_t* start = reinterpret_cast<uint8_t*>(bin->GetPtr(phdr->p_vaddr));
                     size_t size = phdr->p_filesz;
-                    tls_.data.push_back({start, size, tls_.filesz, tls_.memsz - tls_.filesz});
-                    CHECK(tls_.data_map.emplace(bin, &tls_.data.back()).second);
+                    uintptr_t file_offset = tls_.filesz;
+                    CHECK(tls_.bin_to_index.emplace(bin, tls_.data.size()).second);
+                    tls_.data.push_back({bin, start, size, file_offset, bss_offset});
                     tls_.memsz += phdr->p_memsz;
                     tls_.filesz += size;
+                    bss_offset += phdr->p_memsz - size;
                 }
             }
         }
+
+        for (TLS::Data& d : tls_.data) {
+            d.bss_offset += tls_.filesz;
+            LOGF("TLS of %s: file=%lx +%lx mem=%lx\n",
+                 d.bin->name().c_str(),
+                 d.file_offset, d.size,
+                 d.bss_offset);
+        }
+
         LOGF("TLS: filesz=%lx memsz=%lx cnt=%zu\n",
              tls_.filesz, tls_.memsz, tls_.data.size());
     }
@@ -1049,15 +1062,17 @@ private:
         const Elf_Phdr* tls = bin->tls();
         CHECK(tls);
         CHECK(!tls_.data.empty());
-        auto found = tls_.data_map.find(bin);
-        CHECK(found != tls_.data_map.end());
-        const TLS::Data* entry = found->second;
+        auto found = tls_.bin_to_index.find(bin);
+        CHECK(found != tls_.bin_to_index.end());
+        const TLS::Data& entry = tls_.data[found->second];
         if (off < tls->p_filesz) {
-            LOGF("TLS data %s remapped %lx => %lx\n", msg, off, off + entry->file_offset);
-            off += entry->file_offset;
+            LOGF("TLS data %s in %s remapped %lx => %lx\n",
+                 msg, bin->name().c_str(), off, off + entry.file_offset);
+            off += entry.file_offset;
         } else {
-            LOGF("TLS bss %s remapped %lx => %lx\n", msg, off, off + entry->bss_offset);
-            off += entry->bss_offset;
+            LOGF("TLS bss %s in %s remapped %lx => %lx\n",
+                 msg, bin->name().c_str(), off, off + entry.bss_offset);
+            off += entry.bss_offset;
         }
         return off;
     }

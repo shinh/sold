@@ -10,3 +10,5 @@ int lib_base_global();
 int lib_base_vf();
 int lib_base_thread_var();
 int lib_base_thread_var_reloc();
+int lib_thread_var();
+int lib_thread_var_reloc();

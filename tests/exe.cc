@@ -37,6 +37,8 @@ int main(int argc, char** argv) {
 
     if (lib_base_thread_var() != 121) abort();
     if (lib_base_thread_var_reloc() != 42) abort();
+    if (lib_thread_var() != 111) abort();
+    if (lib_thread_var_reloc() != 32) abort();
 
     puts("OK");
 }

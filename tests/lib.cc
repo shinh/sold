@@ -64,3 +64,18 @@ int lib_base_thread_var() {
 int lib_base_thread_var_reloc() {
     return base_thread_var_reloc();
 }
+
+thread_local int g_lib_thread_var = 180;
+thread_local int g_lib_thread_var2 = 70;
+thread_local int g_lib_thread_bss;
+thread_local int g_lib_thread_bss2;
+static int g_buf[] = {32};
+thread_local int* g_lib_thread_buf = g_buf;
+
+int lib_thread_var() {
+    return (g_lib_thread_var - g_lib_thread_var2 - --g_lib_thread_bss) * ++g_lib_thread_bss2;
+}
+
+int lib_thread_var_reloc() {
+    return g_lib_thread_buf[0];
+}
