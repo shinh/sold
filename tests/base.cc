@@ -49,8 +49,10 @@ Base* MakeBase() {
     new BaseImpl();
 }
 
-thread_local int g_base_thread_var = 191;
+thread_local int g_base_thread_var = 190;
 thread_local int g_base_thread_var2 = 70;
+thread_local int g_base_thread_bss;
+thread_local int g_base_thread_bss2;
 int base_thread_var() {
-    return g_base_thread_var - g_base_thread_var2;
+    return (g_base_thread_var - g_base_thread_var2 - --g_base_thread_bss) * ++g_base_thread_bss2;
 }
