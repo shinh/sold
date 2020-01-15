@@ -366,7 +366,7 @@ private:
     Elf_Ehdr* ehdr_{nullptr};
     std::vector<Elf_Phdr*> phdrs_;
     std::vector<Elf_Phdr*> loads_;
-    Elf_Phdr* tls_;
+    Elf_Phdr* tls_{nullptr};
     const char* strtab_{nullptr};
     Elf_Sym* symtab_{nullptr};
 
