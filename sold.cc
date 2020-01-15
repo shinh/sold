@@ -1045,6 +1045,23 @@ private:
         syms_.SetSrcSyms(syms);
     }
 
+    uintptr_t RemapTLS(const char* msg, ELFBinary* bin, uintptr_t off) {
+        const Elf_Phdr* tls = bin->tls();
+        CHECK(tls);
+        CHECK(!tls_.data.empty());
+        auto found = tls_.data_map.find(bin);
+        CHECK(found != tls_.data_map.end());
+        const TLS::Data* entry = found->second;
+        if (off < tls->p_filesz) {
+            LOGF("TLS data %s remapped %lx => %lx\n", msg, off, off + entry->file_offset);
+            off += entry->file_offset;
+        } else {
+            LOGF("TLS bss %s remapped %lx => %lx\n", msg, off, off + entry->bss_offset);
+            off += entry->bss_offset;
+        }
+        return off;
+    }
+
     void LoadDynSymtab(ELFBinary* bin, std::map<std::string, Elf_Sym*>* symtab) {
         bin->ReadDynSymtab();
 
@@ -1053,7 +1070,9 @@ private:
         for (const auto& p : bin->GetSymbolMap()) {
             const std::string& name = p.first;
             Elf_Sym* sym = p.second;
-            if (sym->st_value && !IsTLS(*sym)) {
+            if (IsTLS(*sym)) {
+                sym->st_value = RemapTLS("symbol", bin, sym->st_value);
+            } else if (sym->st_value) {
                 sym->st_value += offset;
             }
             LOGF("Symbol %s@%s %08lx\n", name.c_str(), bin->name().c_str(), sym->st_value);
@@ -1119,18 +1138,8 @@ private:
         if (bin->InTLS(rel->r_offset)) {
             const Elf_Phdr* tls = bin->tls();
             CHECK(tls);
-            CHECK(!tls_.data.empty());
-            auto found = tls_.data_map.find(bin);
-            CHECK(found != tls_.data_map.end());
-            const TLS::Data* entry = found->second;
             uintptr_t off = newrel.r_offset - tls->p_vaddr;
-            if (off < tls->p_filesz) {
-                LOGF("TLS data reloc remapped %lx => %lx\n", off, off + entry->file_offset);
-                off += entry->file_offset;
-            } else {
-                LOGF("TLS bss reloc remapped %lx => %lx\n", off, off + entry->bss_offset);
-                off += entry->bss_offset;
-            }
+            off = RemapTLS("reloc", bin, off);
             newrel.r_offset = off + tls_offset_;
         } else {
             newrel.r_offset += offset;
