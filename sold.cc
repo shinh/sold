@@ -158,6 +158,7 @@ public:
     const Elf_Ehdr* ehdr() const { return ehdr_; }
     const std::vector<Elf_Phdr*> phdrs() const { return phdrs_; }
     const std::vector<Elf_Phdr*> loads() const { return loads_; }
+    const Elf_Phdr* tls() const { return tls_; }
 
     const std::vector<std::string>& neededs() const { return neededs_; }
     const std::string& soname() const { return soname_; }
@@ -188,6 +189,13 @@ public:
             range.end = std::max(range.end, AlignNext(phdr->p_vaddr + phdr->p_memsz));
         }
         return range;
+    }
+
+    bool InTLS(uintptr_t offset) const {
+        if (tls_) {
+            return tls_->p_vaddr <= offset && offset < tls_->p_vaddr + tls_->p_memsz;
+        }
+        return false;
     }
 
     void ReadDynSymtab() {
@@ -273,6 +281,8 @@ private:
             phdrs_.push_back(phdr);
             if (phdr->p_type == PT_LOAD) {
                 loads_.push_back(phdr);
+            } else if (phdr->p_type == PT_TLS) {
+                tls_ = phdr;
             }
         }
 
@@ -379,6 +389,7 @@ private:
     Elf_Ehdr* ehdr_{nullptr};
     std::vector<Elf_Phdr*> phdrs_;
     std::vector<Elf_Phdr*> loads_;
+    Elf_Phdr* tls_;
     const char* strtab_{nullptr};
     Elf_Sym* symtab_{nullptr};
 
@@ -609,9 +620,12 @@ struct TLS {
     struct Data {
         uint8_t* start;
         size_t size;
+        uintptr_t file_offset;
+        uintptr_t bss_offset;
     };
 
     std::vector<Data> data;
+    std::map<ELFBinary*, Data*> data_map;
     uintptr_t filesz{0};
     uintptr_t memsz{0};
 };
@@ -1017,7 +1031,8 @@ private:
                 if (phdr->p_type == PT_TLS) {
                     uint8_t* start = reinterpret_cast<uint8_t*>(bin->GetPtr(phdr->p_vaddr));
                     size_t size = phdr->p_filesz;
-                    tls_.data.push_back({start, size});
+                    tls_.data.push_back({start, size, tls_.filesz, tls_.memsz - tls_.filesz});
+                    CHECK(tls_.data_map.emplace(bin, &tls_.data.back()).second);
                     tls_.memsz += phdr->p_memsz;
                     tls_.filesz += size;
                 }
@@ -1099,7 +1114,25 @@ private:
         int type = ELF_R_TYPE(rel->r_info);
         const uintptr_t addend = rel->r_addend;
         Elf_Rel newrel = *rel;
-        newrel.r_offset += offset;
+        if (bin->InTLS(rel->r_offset)) {
+            const Elf_Phdr* tls = bin->tls();
+            CHECK(tls);
+            CHECK(!tls_.data.empty());
+            auto found = tls_.data_map.find(bin);
+            CHECK(found != tls_.data_map.end());
+            const TLS::Data* entry = found->second;
+            uintptr_t off = newrel.r_offset - tls->p_vaddr;
+            if (off < tls->p_filesz) {
+                LOGF("TLS data reloc remapped %lx => %lx\n", off, off + entry->file_offset);
+                off += entry->file_offset;
+            } else {
+                LOGF("TLS bss reloc remapped %lx => %lx\n", off, off + entry->bss_offset);
+                off += entry->bss_offset;
+            }
+            newrel.r_offset = off + tls_offset_;
+        } else {
+            newrel.r_offset += offset;
+        }
 
         LOGF("Relocate %s at %lx\n", bin->Str(sym->st_name), rel->r_offset);
 

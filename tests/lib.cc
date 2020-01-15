@@ -60,3 +60,7 @@ int lib_base_vf() {
 int lib_base_thread_var() {
     return base_thread_var();
 }
+
+int lib_base_thread_var_reloc() {
+    return base_thread_var_reloc();
+}
