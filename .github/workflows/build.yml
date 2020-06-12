@@ -1,0 +1,17 @@
+name: Build and test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install requirements
+      run: sudo apt install ninja-build
+    - name: CMake
+      run: mkdir build && cd build && cmake -GNinja ..
+    - name: Build
+      run: cmake --build build
