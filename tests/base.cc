@@ -46,7 +46,7 @@ public:
 };
 
 Base* MakeBase() {
-    new BaseImpl();
+    return new BaseImpl();
 }
 
 thread_local int g_base_thread_var = 190;
