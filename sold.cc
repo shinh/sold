@@ -111,10 +111,9 @@ uint32_t CalcHash(const std::string& name) {
     uint32_t h = 0, g;
     for (unsigned char c : name) {
         h = (h << 4) + c;
-        if ((g = h & 0xf0000000)) {
-            h ^= g >> 24;
-        }
-        h &= ~g;
+        g = h & 0xf0000000;
+        h ^= g >> 24;
+        h ^= g;
     }
     return h;
 }
