@@ -15,15 +15,17 @@ add_executable(
 
 add_subdirectory(tests)
 
-add_custom_command(
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tests/test_out"
-  COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_exe" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_out"
-  DEPENDS sold test_exe
-  )
+foreach(t exe hash)
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
+    COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
+    DEPENDS sold test_${t}
+    )
 
-add_custom_command(
-  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out_stamp
-  COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out
-  DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tests/test_out"
-  )
-add_custom_target(run_test_out ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tests/test_out_stamp)
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out_stamp
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out
+    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
+    )
+  add_custom_target(run_test_${t}_out ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out_stamp)
+endforeach()

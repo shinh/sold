@@ -107,6 +107,31 @@ uint32_t CalcGnuHash(const std::string& name) {
     return h;
 }
 
+uint32_t CalcHash(const std::string& name) {
+    uint32_t h = 0, g;
+    for (unsigned char c : name) {
+        h = (h << 4) + c;
+        g = h & 0xf0000000;
+        h ^= g >> 24;
+        h ^= g;
+    }
+    return h;
+}
+
+struct Elf_Hash {
+    uint32_t nbuckets{0};
+    uint32_t nchains{0};
+    uint8_t tail[0];
+
+    const uint32_t* buckets() const {
+        return reinterpret_cast<const uint32_t*>(tail);
+    }
+
+    const uint32_t* chains() const {
+        return buckets() + nchains;
+    }
+};
+
 bool IsTLS(const Elf_Sym& sym) {
     return ELF_ST_TYPE(sym.st_info) == STT_TLS;
 }
@@ -200,27 +225,37 @@ public:
 
     void ReadDynSymtab() {
         CHECK(symtab_);
-        // TODO(hamaji): Support DT_HASH.
-        CHECK(gnu_hash_);
         LOGF("Read dynsymtab of %s\n", name().c_str());
-        const uint32_t* buckets = gnu_hash_->buckets();
-        const uint32_t* hashvals = gnu_hash_->hashvals();
-        for (int i = 0; i < gnu_hash_->nbuckets; ++i) {
-            int n = buckets[i];
-            if (!n) continue;
-            const uint32_t* hv = &hashvals[n - gnu_hash_->symndx];
-            for (Elf_Sym* sym = &symtab_[n];; ++sym) {
-                uint32_t h2 = *hv++;
-                const std::string name(strtab_ + sym->st_name);
-                // LOGF("%s@%s\n", name.c_str(), name_.c_str());
-                // TODO(hamaji): Handle version symbols.
-                CHECK(syms_.emplace(name, sym).second);
-                if (h2 & 1) break;
+        if (gnu_hash_) {
+            const uint32_t* buckets = gnu_hash_->buckets();
+            const uint32_t* hashvals = gnu_hash_->hashvals();
+            for (int i = 0; i < gnu_hash_->nbuckets; ++i) {
+                int n = buckets[i];
+                if (!n) continue;
+                const uint32_t* hv = &hashvals[n - gnu_hash_->symndx];
+                for (Elf_Sym* sym = &symtab_[n];; ++sym) {
+                    uint32_t h2 = *hv++;
+                    const std::string name(strtab_ + sym->st_name);
+                    // LOGF("%s@%s\n", name.c_str(), name_.c_str());
+                    // TODO(hamaji): Handle version symbols.
+                    CHECK(syms_.emplace(name, sym).second);
+                    if (h2 & 1) break;
+                }
             }
-        }
-        for (int n = 0; n < gnu_hash_->symndx; ++n) {
-            Elf_Sym* sym = &symtab_[n];
-            if (sym->st_name) {
+            for (size_t n = 0; n < gnu_hash_->symndx; ++n) {
+                Elf_Sym* sym = &symtab_[n];
+                if (sym->st_name) {
+                    const std::string name(strtab_ + sym->st_name);
+                    CHECK(syms_.emplace(name, sym).second);
+                }
+            }
+        } else {
+            CHECK(hash_);
+            const uint32_t* buckets = hash_->buckets();
+            for (size_t i = 0; i < hash_->nbuckets; ++i) {
+                int n = buckets[i];
+                Elf_Sym* sym = &symtab_[n];
+                if (sym->st_name == 0) continue;
                 const std::string name(strtab_ + sym->st_name);
                 CHECK(syms_.emplace(name, sym).second);
             }
@@ -293,6 +328,8 @@ private:
                 symtab_ = reinterpret_cast<Elf_Sym*>(get_ptr());
             } else if (dyn->d_tag == DT_GNU_HASH) {
                 gnu_hash_ = reinterpret_cast<Elf_GnuHash*>(get_ptr());
+            } else if (dyn->d_tag == DT_HASH) {
+                hash_ = reinterpret_cast<Elf_Hash*>(get_ptr());
             } else if (dyn->d_tag == DT_RELA) {
                 rel_ = reinterpret_cast<Elf_Rel*>(get_ptr());
             } else if (dyn->d_tag == DT_RELASZ) {
@@ -381,6 +418,7 @@ private:
     size_t num_plt_rels_{0};
 
     Elf_GnuHash* gnu_hash_{nullptr};
+    Elf_Hash* hash_{nullptr};
 
     uintptr_t init_{0};
     uintptr_t fini_{0};

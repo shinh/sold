@@ -16,3 +16,11 @@ target_link_libraries(
   test_lib
   "-Wl,-R,'$$ORIGIN'"
   )
+
+add_executable(test_hash exe.cc)
+target_link_libraries(
+  test_hash
+  test_lib
+  -Wl,--hash-style=sysv
+  "-Wl,-R,'$$ORIGIN'"
+  )
