@@ -36,16 +36,21 @@
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
 
-#define CHECK(r) do { if (!(r)) assert(r); } while (0)
+#define CHECK(r)             \
+    do {                     \
+        if (!(r)) assert(r); \
+    } while (0)
 
 namespace {
 
 bool FLAGS_LOG{true};
 
 #ifdef NOLOG
-# define LOGF(...) if (0) fprintf(stderr, __VA_ARGS__)
+#define LOGF(...) \
+    if (0) fprintf(stderr, __VA_ARGS__)
 #else
-# define LOGF(...) if (FLAGS_LOG) fprintf(stderr, __VA_ARGS__)
+#define LOGF(...) \
+    if (FLAGS_LOG) fprintf(stderr, __VA_ARGS__)
 #endif
 
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep) {
@@ -74,9 +79,7 @@ struct Range {
     uintptr_t start;
     uintptr_t end;
     ptrdiff_t size() const { return end - start; }
-    Range operator+(uintptr_t offset) const {
-        return Range{start + offset, end + offset};
-    }
+    Range operator+(uintptr_t offset) const { return Range{start + offset, end + offset}; }
 };
 
 struct Elf_GnuHash {
@@ -86,17 +89,11 @@ struct Elf_GnuHash {
     uint32_t shift2{0};
     uint8_t tail[1];
 
-    Elf_Addr* bloom_filter() {
-        return reinterpret_cast<Elf_Addr*>(tail);
-    }
+    Elf_Addr* bloom_filter() { return reinterpret_cast<Elf_Addr*>(tail); }
 
-    uint32_t* buckets() {
-        return reinterpret_cast<uint32_t*>(&bloom_filter()[maskwords]);
-    }
+    uint32_t* buckets() { return reinterpret_cast<uint32_t*>(&bloom_filter()[maskwords]); }
 
-    uint32_t* hashvals() {
-        return reinterpret_cast<uint32_t*>(&buckets()[nbuckets]);
-    }
+    uint32_t* hashvals() { return reinterpret_cast<uint32_t*>(&buckets()[nbuckets]); }
 };
 
 uint32_t CalcGnuHash(const std::string& name) {
@@ -123,13 +120,9 @@ struct Elf_Hash {
     uint32_t nchains{0};
     uint8_t tail[0];
 
-    const uint32_t* buckets() const {
-        return reinterpret_cast<const uint32_t*>(tail);
-    }
+    const uint32_t* buckets() const { return reinterpret_cast<const uint32_t*>(tail); }
 
-    const uint32_t* chains() const {
-        return buckets() + nchains;
-    }
+    const uint32_t* chains() const { return buckets() + nchains; }
 };
 
 bool IsTLS(const Elf_Sym& sym) {
@@ -144,11 +137,7 @@ bool IsDefined(const Elf_Sym& sym) {
 
 class ELFBinary {
 public:
-    ELFBinary(const std::string& filename, int fd, char* head, size_t size)
-      : filename_(filename),
-        fd_(fd),
-        head_(head),
-        size_(size) {
+    ELFBinary(const std::string& filename, int fd, char* head, size_t size) : filename_(filename), fd_(fd), head_(head), size_(size) {
         ehdr_ = reinterpret_cast<Elf_Ehdr*>(head);
 
         {
@@ -262,13 +251,9 @@ public:
         }
     }
 
-    const char* Str(uintptr_t name) {
-        return strtab_ + name;
-    }
+    const char* Str(uintptr_t name) { return strtab_ + name; }
 
-    char* GetPtr(uintptr_t offset) {
-        return head_ + OffsetFromAddr(offset);
-    }
+    char* GetPtr(uintptr_t offset) { return head_ + OffsetFromAddr(offset); }
 
     Elf_Phdr* FindPhdr(uint64_t type) {
         for (Elf_Phdr* phdr : phdrs_) {
@@ -288,8 +273,7 @@ public:
 private:
     void ParsePhdrs() {
         for (int i = 0; i < ehdr_->e_phnum; ++i) {
-            Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(
-                head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
+            Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
             phdrs_.push_back(phdr);
             if (phdr->p_type == PT_LOAD) {
                 loads_.push_back(phdr);
@@ -311,8 +295,7 @@ private:
         CHECK(size % dyn_size == 0);
         std::vector<Elf_Dyn*> dyns;
         for (size_t i = 0; i < size / dyn_size; ++i) {
-            Elf_Dyn* dyn = reinterpret_cast<Elf_Dyn*>(
-                head_ + off + dyn_size * i);
+            Elf_Dyn* dyn = reinterpret_cast<Elf_Dyn*>(head_ + off + dyn_size * i);
             dyns.push_back(dyn);
         }
 
@@ -378,8 +361,7 @@ private:
         }
     }
 
-    void ParseFuncArray(uintptr_t* array, uintptr_t size,
-                        std::vector<uintptr_t>* out) {
+    void ParseFuncArray(uintptr_t* array, uintptr_t size, std::vector<uintptr_t>* out) {
         for (size_t i = 0; i < size / sizeof(uintptr_t); ++i) {
             out->push_back(array[i]);
         }
@@ -431,24 +413,18 @@ private:
 
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     int fd = open(filename.c_str(), O_RDONLY);
-    if (fd < 0)
-        err(1, "open failed: %s", filename.c_str());
+    if (fd < 0) err(1, "open failed: %s", filename.c_str());
 
     size_t size = lseek(fd, 0, SEEK_END);
-    if (size < 8 + 16)
-        err(1, "too small file: %s", filename.c_str());
+    if (size < 8 + 16) err(1, "too small file: %s", filename.c_str());
 
     size_t mapped_size = (size + 0xfff) & ~0xfff;
 
-    char* p = (char*)mmap(NULL, mapped_size,
-                          PROT_READ | PROT_WRITE, MAP_PRIVATE,
-                          fd, 0);
-    if (p == MAP_FAILED)
-        err(1, "mmap failed: %s", filename.c_str());
+    char* p = (char*)mmap(NULL, mapped_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (p == MAP_FAILED) err(1, "mmap failed: %s", filename.c_str());
 
     if (ELFBinary::IsELF(p)) {
-        return std::make_unique<ELFBinary>(
-            filename.c_str(), fd, p, mapped_size);
+        return std::make_unique<ELFBinary>(filename.c_str(), fd, p, mapped_size);
     }
     err(1, "unknown file format: %s", filename.c_str());
 }
@@ -463,17 +439,11 @@ public:
         return pos;
     }
 
-    void Freeze() {
-        is_freezed_ = true;
-    }
+    void Freeze() { is_freezed_ = true; }
 
-    size_t size() const {
-        return strtab_.size();
-    }
+    size_t size() const { return strtab_.size(); }
 
-    const void* data() const {
-        return strtab_.data();
-    }
+    const void* data() const { return strtab_.data(); }
 
 private:
     std::string strtab_;
@@ -487,9 +457,7 @@ public:
         uintptr_t index;
     };
 
-    void SetSrcSyms(std::map<std::string, Elf_Sym*> syms) {
-        src_syms_ = syms;
-    }
+    void SetSrcSyms(std::map<std::string, Elf_Sym*> syms) { src_syms_ = syms; }
 
     uintptr_t AddSym(const std::string& name) {
         uintptr_t index = sym_names_.size();
@@ -575,9 +543,7 @@ public:
         }
     }
 
-    void AddPublicSymbol(const std::string& name, Elf_Sym sym) {
-        public_syms_.emplace(name, sym);
-    }
+    void AddPublicSymbol(const std::string& name, Elf_Sym sym) { public_syms_.emplace(name, sym); }
 
     void MergePublicSymbols(StrtabBuilder* strtab) {
         gnu_hash_.nbuckets = 1;
@@ -597,9 +563,7 @@ public:
         public_syms_.clear();
     }
 
-    uintptr_t size() const {
-        return symtab_.size() + public_syms_.size();
-    }
+    uintptr_t size() const { return symtab_.size() + public_syms_.size(); }
 
     const Elf_GnuHash& gnu_hash() const { return gnu_hash_; }
 
@@ -607,18 +571,12 @@ public:
         CHECK(!symtab_.empty());
         CHECK(public_syms_.empty());
         CHECK(gnu_hash_.nbuckets);
-        return (sizeof(uint32_t) * 4 +
-                sizeof(Elf_Addr) +
-                sizeof(uint32_t) * (1 + symtab_.size() - gnu_hash_.symndx));
+        return (sizeof(uint32_t) * 4 + sizeof(Elf_Addr) + sizeof(uint32_t) * (1 + symtab_.size() - gnu_hash_.symndx));
     }
 
-    const std::vector<Elf_Sym>& Get() {
-        return symtab_;
-    }
+    const std::vector<Elf_Sym>& Get() { return symtab_; }
 
-    const std::vector<std::string>& GetNames() const {
-        return sym_names_;
-    }
+    const std::vector<std::string>& GetNames() const { return sym_names_; }
 
 private:
     std::map<std::string, Elf_Sym*> src_syms_;
@@ -688,9 +646,7 @@ private:
         CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
     }
 
-    void WriteBuf(FILE* fp, const void* buf, size_t size) {
-        CHECK(fwrite(buf, 1, size, fp) == size);
-    }
+    void WriteBuf(FILE* fp, const void* buf, size_t size) { CHECK(fwrite(buf, 1, size, fp) == size); }
 
     void EmitZeros(FILE* fp, uintptr_t cnt) {
         std::string zero(cnt, '\0');
@@ -741,37 +697,21 @@ private:
         return num_phdrs;
     }
 
-    uintptr_t GnuHashOffset() const {
-        return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum;
-    }
+    uintptr_t GnuHashOffset() const { return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum; }
 
-    uintptr_t SymtabOffset() const {
-        return GnuHashOffset() + syms_.gnu_hash_size();
-    }
+    uintptr_t SymtabOffset() const { return GnuHashOffset() + syms_.gnu_hash_size(); }
 
-    uintptr_t RelOffset() const {
-        return SymtabOffset() + syms_.size() * sizeof(Elf_Sym);
-    }
+    uintptr_t RelOffset() const { return SymtabOffset() + syms_.size() * sizeof(Elf_Sym); }
 
-    uintptr_t InitArrayOffset() const {
-        return AlignNext(RelOffset() + rels_.size() * sizeof(Elf_Rel), 7);
-    }
+    uintptr_t InitArrayOffset() const { return AlignNext(RelOffset() + rels_.size() * sizeof(Elf_Rel), 7); }
 
-    uintptr_t FiniArrayOffset() const {
-        return InitArrayOffset() + sizeof(uintptr_t) * init_array_.size();
-    }
+    uintptr_t FiniArrayOffset() const { return InitArrayOffset() + sizeof(uintptr_t) * init_array_.size(); }
 
-    uintptr_t StrtabOffset() const {
-        return FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size();
-    }
+    uintptr_t StrtabOffset() const { return FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size(); }
 
-    uintptr_t DynamicOffset() const {
-        return StrtabOffset() + strtab_.size();
-    }
+    uintptr_t DynamicOffset() const { return StrtabOffset() + strtab_.size(); }
 
-    uintptr_t CodeOffset() const {
-        return AlignNext(DynamicOffset() + sizeof(Elf_Dyn) * dynamic_.size());
-    }
+    uintptr_t CodeOffset() const { return AlignNext(DynamicOffset() + sizeof(Elf_Dyn) * dynamic_.size()); }
 
     void BuildEhdr() {
         ehdr_ = *main_binary_->ehdr();
@@ -1012,10 +952,7 @@ private:
         for (const Load& load : loads_) {
             ELFBinary* bin = load.bin;
             Elf_Phdr* phdr = load.orig;
-            LOGF("Emitting code of %s from %lx => %lx +%lx\n",
-                 bin->name().c_str(), ftell(fp),
-                 load.emit.p_offset,
-                 phdr->p_filesz);
+            LOGF("Emitting code of %s from %lx => %lx +%lx\n", bin->name().c_str(), ftell(fp), load.emit.p_offset, phdr->p_filesz);
             EmitPad(fp, load.emit.p_offset);
             WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
         }
@@ -1034,8 +971,7 @@ private:
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
             offsets_.emplace(bin, range.start);
-            LOGF("Assigned: %s %08lx-%08lx\n",
-                 bin->soname().c_str(), range.start, range.end);
+            LOGF("Assigned: %s %08lx-%08lx\n", bin->soname().c_str(), range.start, range.end);
             offset = range.end;
         }
         tls_offset_ = offset;
@@ -1060,14 +996,10 @@ private:
 
         for (TLS::Data& d : tls_.data) {
             d.bss_offset += tls_.filesz;
-            LOGF("TLS of %s: file=%lx +%lx mem=%lx\n",
-                 d.bin->name().c_str(),
-                 d.file_offset, d.size,
-                 d.bss_offset);
+            LOGF("TLS of %s: file=%lx +%lx mem=%lx\n", d.bin->name().c_str(), d.file_offset, d.size, d.bss_offset);
         }
 
-        LOGF("TLS: filesz=%lx memsz=%lx cnt=%zu\n",
-             tls_.filesz, tls_.memsz, tls_.data.size());
+        LOGF("TLS: filesz=%lx memsz=%lx cnt=%zu\n", tls_.filesz, tls_.memsz, tls_.data.size());
     }
 
     void CollectArrays() {
@@ -1084,8 +1016,7 @@ private:
                 fini_array_.push_back(ptr + offset);
             }
         }
-        LOGF("Array numbers: init_array=%zu fini_array=%zu\n",
-             init_array_.size(), fini_array_.size());
+        LOGF("Array numbers: init_array=%zu fini_array=%zu\n", init_array_.size(), fini_array_.size());
     }
 
     void CollectSymbols() {
@@ -1104,12 +1035,10 @@ private:
         CHECK(found != tls_.bin_to_index.end());
         const TLS::Data& entry = tls_.data[found->second];
         if (off < tls->p_filesz) {
-            LOGF("TLS data %s in %s remapped %lx => %lx\n",
-                 msg, bin->name().c_str(), off, off + entry.file_offset);
+            LOGF("TLS data %s in %s remapped %lx => %lx\n", msg, bin->name().c_str(), off, off + entry.file_offset);
             off += entry.file_offset;
         } else {
-            LOGF("TLS bss %s in %s remapped %lx => %lx\n",
-                 msg, bin->name().c_str(), off, off + entry.bss_offset);
+            LOGF("TLS bss %s in %s remapped %lx => %lx\n", msg, bin->name().c_str(), off, off + entry.bss_offset);
             off += entry.bss_offset;
         }
         return off;
@@ -1201,46 +1130,46 @@ private:
         LOGF("Relocate %s at %lx\n", bin->Str(sym->st_name), rel->r_offset);
 
         switch (type) {
-        case R_X86_64_RELATIVE: {
-            newrel.r_addend += offset;
-            break;
-        }
-
-        case R_X86_64_GLOB_DAT:
-        case R_X86_64_JUMP_SLOT: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
-                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-                newrel.r_addend = val_or_index;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
+            case R_X86_64_RELATIVE: {
+                newrel.r_addend += offset;
+                break;
             }
-            break;
-        }
 
-        case R_X86_64_64: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
-                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-                newrel.r_addend += val_or_index;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
+            case R_X86_64_GLOB_DAT:
+            case R_X86_64_JUMP_SLOT: {
+                uintptr_t val_or_index;
+                if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                    newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                    newrel.r_addend = val_or_index;
+                } else {
+                    newrel.r_info = ELF_R_INFO(val_or_index, type);
+                }
+                break;
             }
-            break;
-        }
 
-        case R_X86_64_DTPMOD64:
-        case R_X86_64_DTPOFF64:
-        case R_X86_64_COPY: {
-            const std::string name = bin->Str(sym->st_name);
-            uintptr_t index = syms_.ResolveCopy(name);
-            newrel.r_info = ELF_R_INFO(index, type);
-            break;
-        }
+            case R_X86_64_64: {
+                uintptr_t val_or_index;
+                if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                    newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                    newrel.r_addend += val_or_index;
+                } else {
+                    newrel.r_info = ELF_R_INFO(val_or_index, type);
+                }
+                break;
+            }
 
-        default:
-            LOGF("Unknown relocation type: %d\n", type);
-            CHECK(false);
+            case R_X86_64_DTPMOD64:
+            case R_X86_64_DTPOFF64:
+            case R_X86_64_COPY: {
+                const std::string name = bin->Str(sym->st_name);
+                uintptr_t index = syms_.ResolveCopy(name);
+                newrel.r_info = ELF_R_INFO(index, type);
+                break;
+            }
+
+            default:
+                LOGF("Unknown relocation type: %d\n", type);
+                CHECK(false);
         }
 
         rels_.push_back(newrel);
@@ -1254,13 +1183,10 @@ private:
         }
     }
 
-    std::string ResolveRunPathVariables(const ELFBinary* binary,
-                                        const std::string& runpath) {
+    std::string ResolveRunPathVariables(const ELFBinary* binary, const std::string& runpath) {
         std::string out = runpath;
 
-        auto replace = [](std::string& s,
-                          const std::string& f,
-                          const std::string& t) {
+        auto replace = [](std::string& s, const std::string& f, const std::string& t) {
             size_t found = s.find(f);
             while (found != std::string::npos) {
                 s.replace(found, f.size(), t);
@@ -1330,8 +1256,7 @@ private:
                 link_binaries_.push_back(library.get());
             }
 
-            LOGF("Loaded: %s => %s\n",
-                 needed.c_str(), library->filename().c_str());
+            LOGF("Loaded: %s => %s\n", needed.c_str(), library->filename().c_str());
 
             auto inserted = libraries_.emplace(needed, std::move(library));
             CHECK(inserted.second);
@@ -1350,16 +1275,8 @@ private:
     static bool ShouldLink(const std::string& soname) {
         // TODO(hamaji): Make this customizable.
         std::vector<std::string> nolink_prefixes = {
-            "libc.so",
-            "libm.so",
-            "libdl.so",
-            "librt.so",
-            "libpthread.so",
-            "libgcc_s.so",
-            "libstdc++.so",
-            "libgomp.so",
-            "ld-linux",
-            "libcuda.so",
+            "libc.so",     "libm.so",      "libdl.so",   "librt.so", "libpthread.so",
+            "libgcc_s.so", "libstdc++.so", "libgomp.so", "ld-linux", "libcuda.so",
         };
         for (const std::string& prefix : nolink_prefixes) {
             if (HasPrefix(soname, prefix)) {
@@ -1369,9 +1286,7 @@ private:
         return true;
     }
 
-    uintptr_t AddStr(const std::string& s) {
-        return strtab_.Add(s);
-    }
+    uintptr_t AddStr(const std::string& s) { return strtab_.Add(s); }
 
     struct Load {
         ELFBinary* bin;
