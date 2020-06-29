@@ -1225,15 +1225,11 @@ private:
             }
         }
 
-        // TODO(hamaji): Make this customizable.
-        library_paths.push_back("/lib");
-        library_paths.push_back("/usr/local/lib");
-        library_paths.push_back("/usr/local/lib/x86_64-linux-gnu");
-        library_paths.push_back("/lib/x86_64-linux-gnu");
-        library_paths.push_back("/usr/lib/x86_64-linux-gnu");
-
         std::vector<std::string> ldsoconfs = ldsoconf::read_ldsoconf();
         library_paths.insert(library_paths.end(), ldsoconfs.begin(), ldsoconfs.end());
+
+        library_paths.push_back("/lib");
+        library_paths.push_back("/usr/lib");
 
         return library_paths;
     }
