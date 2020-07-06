@@ -11,7 +11,10 @@ endif()
 add_executable(
   sold
   sold.cc
+  elf_binary.cc
+  hash.cc
   ldsoconf.cc
+  utils.cc
   )
 
 add_subdirectory(tests)
