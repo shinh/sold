@@ -149,6 +149,39 @@ void ELFBinary::PrintVerneeds() {
         vn = (Elf_Verneed*)((char*)vn + vn->vn_next);
     }
 }
+
+std::string ELFBinary::ShowVersym(int index) {
+    CHECK(0 < index && index <= nsyms_ + 1);
+    if (versym_[index] == VER_NDX_LOCAL) {
+        return std::string("VER_NDX_LOCAL");
+    } else if (versym_[index] == VER_NDX_GLOBAL) {
+        return std::string("VER_NDX_GLOBAL");
+    } else {
+        CHECK(verneed_);
+        Elf_Verneed* vn = verneed_;
+        for (int i = 0; i < verneednum_; ++i) {
+            LOGF("VERNEED: ver=%d cnt=%d file=%s aux=%d next=%d\n", vn->vn_version, vn->vn_cnt, strtab_ + vn->vn_file, vn->vn_aux,
+                 vn->vn_next);
+            Elf_Vernaux* vna = (Elf_Vernaux*)((char*)vn + vn->vn_aux);
+            for (int j = 0; j < vn->vn_cnt; ++j) {
+                LOGF(" VERNAUX: hash=%d flags=%d other=%d name=%s next=%d\n", vna->vna_hash, vna->vna_flags, vna->vna_other,
+                     strtab_ + vna->vna_name, vna->vna_next);
+
+                if (vna->vna_other == versym_[index]) {
+                    std::stringstream ss;
+                    ss << std::string(strtab_ + vna->vna_name) << " (" << versym_[index] << ")";
+                    return ss.str();
+                }
+
+                vna = (Elf_Vernaux*)((char*)vna + vna->vna_next);
+            }
+            vn = (Elf_Verneed*)((char*)vn + vn->vn_next);
+        }
+        LOGF("Failed to find Elf_Vernaux corresponds to %d\n", versym_[index]);
+        exit(1);
+    }
+}
+
 void ELFBinary::ParsePhdrs() {
     for (int i = 0; i < ehdr_->e_phnum; ++i) {
         Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
@@ -261,6 +294,24 @@ Elf_Addr ELFBinary::OffsetFromAddr(Elf_Addr addr) {
     }
     LOGF("Address %llx cannot be resolved\n", static_cast<long long>(addr));
     abort();
+}
+
+std::string ELFBinary::ShowDynSymtab() {
+    LOGF("ShowDynSymtab\n");
+    std::vector<std::string> res(syms_.size() + 1);
+    for (auto it : syms_) {
+        std::stringstream ss;
+        ss << it.first.second << ": " << it.first.first << " ";
+
+        if (versym_) {
+            ss << ShowVersym(it.first.second) << "\n";
+        } else {
+            ss << "NO_VERSION_INFO\n";
+        }
+        res[it.first.second] = ss.str();
+    }
+
+    return std::accumulate(res.begin(), res.end(), std::string(""));
 }
 
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
