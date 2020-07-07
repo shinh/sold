@@ -43,7 +43,7 @@ public:
     const std::vector<uintptr_t>& init_array() const { return init_array_; }
     const std::vector<uintptr_t>& fini_array() const { return fini_array_; }
 
-    const std::map<std::string, Elf_Sym*>& GetSymbolMap() const { return syms_; }
+    const std::map<std::pair<std::string, int>, Elf_Sym*>& GetSymbolMap() const { return syms_; }
 
     Range GetRange() const;
 
@@ -59,7 +59,9 @@ public:
 
     const Elf_Phdr& GetPhdr(uint64_t type);
 
-    void parse_version();
+    void PrintVerneeds();
+
+    void PrintVersyms();
 
 private:
     void ParsePhdrs();

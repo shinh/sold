@@ -7,6 +7,8 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <numeric>
+#include <sstream>
 
 ELFBinary::ELFBinary(const std::string& filename, int fd, char* head, size_t size)
     : filename_(filename), fd_(fd), head_(head), size_(size) {
@@ -68,9 +70,11 @@ void ELFBinary::ReadDynSymtab() {
             for (Elf_Sym* sym = &symtab_[n];; ++sym) {
                 uint32_t h2 = *hv++;
                 const std::string name(strtab_ + sym->st_name);
-                // LOGF("%s@%s\n", name.c_str(), name_.c_str());
                 // TODO(hamaji): Handle version symbols.
-                CHECK(syms_.emplace(name, sym).second);
+
+                nsyms_++;
+                LOGF("%s@%s index in .dynsymtab = %ld\n", name.c_str(), name_.c_str(), sym - symtab_);
+                CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
                 if (h2 & 1) break;
             }
         }
@@ -78,7 +82,10 @@ void ELFBinary::ReadDynSymtab() {
             Elf_Sym* sym = &symtab_[n];
             if (sym->st_name) {
                 const std::string name(strtab_ + sym->st_name);
-                CHECK(syms_.emplace(name, sym).second);
+
+                nsyms_++;
+                LOGF("%s@%s index in .dynsymtab = %ld\n", name.c_str(), name_.c_str(), sym - symtab_);
+                CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
             }
         }
     } else {
@@ -89,9 +96,13 @@ void ELFBinary::ReadDynSymtab() {
             Elf_Sym* sym = &symtab_[n];
             if (sym->st_name == 0) continue;
             const std::string name(strtab_ + sym->st_name);
-            CHECK(syms_.emplace(name, sym).second);
+
+            nsyms_++;
+            LOGF("%s@%s index in .dynsymtab = %ld\n", name.c_str(), name_.c_str(), sym - symtab_);
+            CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
         }
     }
+    LOGF("nsyms_ = %d\n", nsyms_);
 }
 
 Elf_Phdr* ELFBinary::FindPhdr(uint64_t type) {
@@ -109,6 +120,35 @@ const Elf_Phdr& ELFBinary::GetPhdr(uint64_t type) {
     return *phdr;
 }
 
+void ELFBinary::PrintVersyms() {
+    CHECK(versym_);
+    CHECK(nsyms_);
+
+    for (int i = 0; i < nsyms_ + 1; i++) {
+        if (versym_[i] == VER_NDX_LOCAL) {
+            LOGF("VERSYM: VER_NDX_LOCAL\n");
+        } else if (versym_[i] == VER_NDX_GLOBAL) {
+            LOGF("VERSYM: VER_NDX_GLOBAL\n");
+        } else {
+            LOGF("VERSYM: %d\n", versym_[i]);
+        }
+    }
+}
+
+void ELFBinary::PrintVerneeds() {
+    CHECK(verneed_);
+    Elf_Verneed* vn = verneed_;
+    for (int i = 0; i < verneednum_; ++i) {
+        LOGF("VERNEED: ver=%d cnt=%d file=%s aux=%d next=%d\n", vn->vn_version, vn->vn_cnt, strtab_ + vn->vn_file, vn->vn_aux, vn->vn_next);
+        Elf_Vernaux* vna = (Elf_Vernaux*)((char*)vn + vn->vn_aux);
+        for (int j = 0; j < vn->vn_cnt; ++j) {
+            LOGF(" VERNAUX: hash=%d flags=%d other=%d name=%s next=%d\n", vna->vna_hash, vna->vna_flags, vna->vna_other,
+                 strtab_ + vna->vna_name, vna->vna_next);
+            vna = (Elf_Vernaux*)((char*)vna + vna->vna_next);
+        }
+        vn = (Elf_Verneed*)((char*)vn + vn->vn_next);
+    }
+}
 void ELFBinary::ParsePhdrs() {
     for (int i = 0; i < ehdr_->e_phnum; ++i) {
         Elf_Phdr* phdr = reinterpret_cast<Elf_Phdr*>(head_ + ehdr_->e_phoff + ehdr_->e_phentsize * i);
@@ -180,6 +220,12 @@ void ELFBinary::ParseDynamic(size_t off, size_t size) {
             init_ = dyn->d_un.d_ptr;
         } else if (dyn->d_tag == DT_FINI) {
             fini_ = dyn->d_un.d_ptr;
+        } else if (dyn->d_tag == DT_VERSYM) {
+            versym_ = reinterpret_cast<Elf_Versym*>(get_ptr());
+        } else if (dyn->d_tag == DT_VERNEED) {
+            verneed_ = reinterpret_cast<Elf_Verneed*>(get_ptr());
+        } else if (dyn->d_tag == DT_VERNEEDNUM) {
+            verneednum_ = dyn->d_un.d_val;
         }
     }
     CHECK(strtab_);
