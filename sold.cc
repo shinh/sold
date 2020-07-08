@@ -51,6 +51,12 @@ private:
 
 class SymtabBuilder {
 public:
+    SymtabBuilder() {
+        Symbol sym = {0};
+        AddSym("");
+        CHECK(syms_.emplace("", sym).second);
+    }
+
     struct Symbol {
         Elf_Sym sym;
         uintptr_t index;
