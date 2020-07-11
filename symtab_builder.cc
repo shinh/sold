@@ -2,7 +2,19 @@
 
 #include <limits>
 
-bool SymtabBuilder::Resolve(const std::string& name, uintptr_t* val_or_index) {
+SymtabBuilder::SymtabBuilder() {
+    Symbol sym = {0};
+    AddSym("");
+    CHECK(syms_.emplace("", sym).second);
+}
+
+uintptr_t SymtabBuilder::AddSym(const std::string& name) {
+    uintptr_t index = sym_names_.size();
+    sym_names_.push_back(name);
+    return index;
+}
+
+bool SymtabBuilder::Resolve(const std::string& name, uintptr_t& val_or_index) {
     Symbol sym{};
     sym.sym.st_name = 0;
     sym.sym.st_info = 0;
@@ -33,10 +45,10 @@ bool SymtabBuilder::Resolve(const std::string& name, uintptr_t* val_or_index) {
     }
 
     if (!sym.sym.st_value) {
-        *val_or_index = sym.index;
+        val_or_index = sym.index;
         return false;
     } else {
-        *val_or_index = sym.sym.st_value;
+        val_or_index = sym.sym.st_value;
         return true;
     }
 }
@@ -70,7 +82,17 @@ uintptr_t SymtabBuilder::ResolveCopy(const std::string& name) {
     return sym.index;
 }
 
-void SymtabBuilder::MergePublicSymbols(StrtabBuilder* strtab) {
+void SymtabBuilder::Build(StrtabBuilder& strtab) {
+    for (const std::string& name : sym_names_) {
+        auto found = syms_.find(name);
+        CHECK(found != syms_.end());
+        Elf_Sym sym = found->second.sym;
+        sym.st_name = strtab.Add(name);
+        symtab_.push_back(sym);
+    }
+}
+
+void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab) {
     gnu_hash_.nbuckets = 1;
     CHECK(symtab_.size() <= std::numeric_limits<uint32_t>::max());
     gnu_hash_.symndx = symtab_.size();
@@ -80,7 +102,7 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder* strtab) {
     for (const auto& p : public_syms_) {
         const std::string& name = p.first;
         Elf_Sym sym = p.second;
-        sym.st_name = strtab->Add(name);
+        sym.st_name = strtab.Add(name);
         sym.st_shndx = 1;
         sym_names_.push_back(name);
         symtab_.push_back(sym);
@@ -88,17 +110,7 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder* strtab) {
     public_syms_.clear();
 }
 
-void SymtabBuilder::Build(StrtabBuilder* strtab) {
-    for (const std::string& name : sym_names_) {
-        auto found = syms_.find(name);
-        CHECK(found != syms_.end());
-        Elf_Sym sym = found->second.sym;
-        sym.st_name = strtab->Add(name);
-        symtab_.push_back(sym);
-    }
-}
-
-uintptr_t SymtabBuilder::gnu_hash_size() const {
+uintptr_t SymtabBuilder::GnuHashSize() const {
     CHECK(!symtab_.empty());
     CHECK(public_syms_.empty());
     CHECK(gnu_hash_.nbuckets);

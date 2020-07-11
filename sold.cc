@@ -51,8 +51,8 @@ public:
         CopyPublicSymbols();
         Relocate();
 
-        syms_.Build(&strtab_);
-        syms_.MergePublicSymbols(&strtab_);
+        syms_.Build(strtab_);
+        syms_.MergePublicSymbols(strtab_);
 
         BuildEhdr();
         if (is_executable_) {
@@ -127,7 +127,7 @@ private:
 
     uintptr_t GnuHashOffset() const { return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum; }
 
-    uintptr_t SymtabOffset() const { return GnuHashOffset() + syms_.gnu_hash_size(); }
+    uintptr_t SymtabOffset() const { return GnuHashOffset() + syms_.GnuHashSize(); }
 
     uintptr_t RelOffset() const { return SymtabOffset() + syms_.size() * sizeof(Elf_Sym); }
 
@@ -586,7 +586,7 @@ private:
             case R_X86_64_GLOB_DAT:
             case R_X86_64_JUMP_SLOT: {
                 uintptr_t val_or_index;
-                if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                if (syms_.Resolve(bin->Str(sym->st_name), val_or_index)) {
                     newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                     newrel.r_addend = val_or_index;
                 } else {
@@ -597,7 +597,7 @@ private:
 
             case R_X86_64_64: {
                 uintptr_t val_or_index;
-                if (syms_.Resolve(bin->Str(sym->st_name), &val_or_index)) {
+                if (syms_.Resolve(bin->Str(sym->st_name), val_or_index)) {
                     newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                     newrel.r_addend += val_or_index;
                 } else {
