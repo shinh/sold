@@ -2,6 +2,8 @@
 
 #include <elf.h>
 
+#include <cassert>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -53,3 +55,20 @@ struct Range {
 bool IsTLS(const Elf_Sym& sym);
 
 bool IsDefined(const Elf_Sym& sym);
+
+class ELFBinary;
+
+struct TLS {
+    struct Data {
+        ELFBinary* bin;
+        uint8_t* start;
+        size_t size;
+        uintptr_t file_offset;
+        uintptr_t bss_offset;
+    };
+
+    std::vector<Data> data;
+    std::map<ELFBinary*, size_t> bin_to_index;
+    uintptr_t filesz{0};
+    uintptr_t memsz{0};
+};

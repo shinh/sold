@@ -14,6 +14,8 @@ add_executable(
   elf_binary.cc
   hash.cc
   ldsoconf.cc
+  strtab_builder.cc
+  symtab_builder.cc
   utils.cc
   )
 
@@ -23,6 +25,8 @@ add_executable(
   elf_binary.cc
   hash.cc
   ldsoconf.cc
+  strtab_builder.cc
+  symtab_builder.cc
   utils.cc
   )
 
