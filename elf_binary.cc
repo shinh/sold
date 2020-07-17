@@ -35,9 +35,6 @@ bool ELFBinary::IsELF(const char* p) {
     if (strncmp(p, ELFMAG, SELFMAG)) {
         return false;
     }
-    if (p[EI_CLASS] != ELFCLASS64) {
-        err(1, "non 64bit ELF isn't supported yet");
-    }
     return true;
 }
 
@@ -327,6 +324,10 @@ std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     if (p == MAP_FAILED) err(1, "mmap failed: %s", filename.c_str());
 
     if (ELFBinary::IsELF(p)) {
+        if (p[EI_CLASS] != ELFCLASS64) {
+            // TODO(hamaji): Non 64bit ELF isn't supported yet.
+            return nullptr;
+        }
         return std::make_unique<ELFBinary>(filename.c_str(), fd, p, mapped_size);
     }
     err(1, "unknown file format: %s", filename.c_str());

@@ -694,7 +694,7 @@ private:
                 const std::string& filename = path + '/' + needed;
                 if (Exists(filename)) {
                     library = ReadELF(filename);
-                    break;
+                    if (library) break;
                 }
             }
             if (!library) {
