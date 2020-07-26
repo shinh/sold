@@ -8,9 +8,8 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 endif()
 
-add_executable(
-  sold
-  sold.cc
+add_library(
+  sold_lib
   elf_binary.cc
   hash.cc
   ldsoconf.cc
@@ -18,28 +17,24 @@ add_executable(
   symtab_builder.cc
   utils.cc
   )
+
+add_executable(
+  sold
+  sold.cc
+  )
+target_link_libraries(sold sold_lib)
 
 add_executable(
   print_dtrela
   print_dtrela.cc
-  elf_binary.cc
-  hash.cc
-  ldsoconf.cc
-  strtab_builder.cc
-  symtab_builder.cc
-  utils.cc
   )
+target_link_libraries(print_dtrela sold_lib)
 
 add_executable(
   print_dynsymtab
   print_dynsymtab.cc
-  elf_binary.cc
-  hash.cc
-  ldsoconf.cc
-  strtab_builder.cc
-  symtab_builder.cc
-  utils.cc
   )
+target_link_libraries(print_dynsymtab sold_lib)
 
 add_subdirectory(tests)
 
