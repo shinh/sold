@@ -318,7 +318,7 @@ std::string ELFBinary::ShowDtRela() {
     ss << "num_rels_ = " << num_rels_ << std::endl;
 
     for (int offset = 0; offset < num_rels_; offset++) {
-        const Elf64_Rela* rp = rel_ + offset;
+        const Elf_Rel* rp = rel_ + offset;
         const Elf_Sym* sym = &symtab_[ELF_R_SYM(rp->r_info)];
         ss << "r_offset = " << rp->r_offset << ", r_info = " << rp->r_info << ", r_addend = " << rp->r_addend
            << ", symbol name = " << std::string(strtab_ + sym->st_name) << std::endl;
