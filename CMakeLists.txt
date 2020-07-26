@@ -20,6 +20,17 @@ add_executable(
   )
 
 add_executable(
+  print_dtrela
+  print_dtrela.cc
+  elf_binary.cc
+  hash.cc
+  ldsoconf.cc
+  strtab_builder.cc
+  symtab_builder.cc
+  utils.cc
+  )
+
+add_executable(
   print_dynsymtab
   print_dynsymtab.cc
   elf_binary.cc
