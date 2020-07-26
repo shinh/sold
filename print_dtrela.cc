@@ -1,3 +1,9 @@
+//
+// print_dtrela
+//
+// This program shows relocation entries in DT_RELA.
+//
+
 #include "elf_binary.h"
 
 #include <iostream>
