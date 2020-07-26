@@ -65,6 +65,8 @@ public:
 
     std::string ShowDynSymtab();
 
+    std::string ShowDtRela();
+
     std::string ShowVersym(int index);
 
 private:

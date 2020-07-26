@@ -311,6 +311,22 @@ std::string ELFBinary::ShowDynSymtab() {
     return std::accumulate(res.begin(), res.end(), std::string(""));
 }
 
+std::string ELFBinary::ShowDtRela() {
+    LOGF("ShowDtRela\n");
+    CHECK(rel_);
+    std::stringstream ss;
+    ss << "num_rels_ = " << num_rels_ << std::endl;
+
+    for (int offset = 0; offset < num_rels_; offset++) {
+        const Elf64_Rela* rp = rel_ + offset;
+        const Elf_Sym* sym = &symtab_[ELF_R_SYM(rp->r_info)];
+        ss << "r_offset = " << rp->r_offset << ", r_info = " << rp->r_info << ", r_addend = " << rp->r_addend
+           << ", symbol name = " << std::string(strtab_ + sym->st_name) << std::endl;
+    }
+
+    return ss.str();
+}
+
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     int fd = open(filename.c_str(), O_RDONLY);
     if (fd < 0) err(1, "open failed: %s", filename.c_str());
