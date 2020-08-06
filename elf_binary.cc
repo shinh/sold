@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <numeric>
+#include <set>
 #include <sstream>
 
 ELFBinary::ELFBinary(const std::string& filename, int fd, char* head, size_t size)
@@ -56,17 +57,43 @@ bool ELFBinary::InTLS(uintptr_t offset) const {
 
 namespace {
 
-void ReadDynSymtabFromReloc(const Elf_Rel* rels, size_t num, const char* strtab, Elf_Sym* symtab, std::map<std::pair<std::string, int>, Elf_Sym*>* syms) {
+std::set<int> CollectSymbolsFromReloc(const Elf_Rel* rels, size_t num) {
+    std::set<int> indices;
     for (size_t i = 0; i < num; ++i) {
         const Elf_Rel* rel = &rels[i];
-        const int idx = ELF_R_SYM(rel->r_info);
-        Elf_Sym* sym = &symtab[idx];
-        const std::string name(strtab + sym->st_name);
-        auto p = syms->emplace(std::make_pair(name, idx), sym);
-        if (!p.second) {
-            CHECK(idx == p.first->first.second);
+        indices.insert(ELF_R_SYM(rel->r_info));
+    }
+    return indices;
+}
+
+std::set<int> CollectSymbolsFromGnuHash(Elf_GnuHash* gnu_hash) {
+    std::set<int> indices;
+    const uint32_t* buckets = gnu_hash->buckets();
+    const uint32_t* hashvals = gnu_hash->hashvals();
+    for (int i = 0; i < gnu_hash->nbuckets; ++i) {
+        int n = buckets[i];
+        if (!n) continue;
+        const uint32_t* hv = &hashvals[n - gnu_hash->symndx];
+        for (;; ++n) {
+            uint32_t h2 = *hv++;
+            CHECK(indices.insert(n).second);
+            if (h2 & 1) break;
         }
     }
+    for (size_t n = 0; n < gnu_hash->symndx; ++n) {
+        indices.insert(n);
+    }
+    return indices;
+}
+
+std::set<int> CollectSymbolsFromElfHash(Elf_Hash* hash) {
+    std::set<int> indices;
+    const uint32_t* buckets = hash->buckets();
+    for (size_t i = 0; i < hash->nbuckets; ++i) {
+        int n = buckets[i];
+        indices.insert(n);
+    }
+    return indices;
 }
 
 }  // namespace
@@ -74,51 +101,32 @@ void ReadDynSymtabFromReloc(const Elf_Rel* rels, size_t num, const char* strtab,
 void ELFBinary::ReadDynSymtab() {
     CHECK(symtab_);
     LOGF("Read dynsymtab of %s\n", name().c_str());
+
+    // Since we only rely on program headers and do not read section headers
+    // at all, we do not know the exact size of .dynsym section. We collect
+    // indices in .dynsym from both (GNU or ELF) hash and relocs.
+
+    std::set<int> indices;
     if (gnu_hash_) {
-        const uint32_t* buckets = gnu_hash_->buckets();
-        const uint32_t* hashvals = gnu_hash_->hashvals();
-        for (int i = 0; i < gnu_hash_->nbuckets; ++i) {
-            int n = buckets[i];
-            if (!n) continue;
-            const uint32_t* hv = &hashvals[n - gnu_hash_->symndx];
-            for (Elf_Sym* sym = &symtab_[n];; ++sym) {
-                uint32_t h2 = *hv++;
-                const std::string name(strtab_ + sym->st_name);
-                // TODO(hamaji): Handle version symbols.
-
-                nsyms_++;
-                LOGF("%s@%s index in .dynsymtab = %ld\n", name.c_str(), name_.c_str(), sym - symtab_);
-                CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
-                if (h2 & 1) break;
-            }
-        }
-        for (size_t n = 0; n < gnu_hash_->symndx; ++n) {
-            Elf_Sym* sym = &symtab_[n];
-            if (sym->st_name) {
-                const std::string name(strtab_ + sym->st_name);
-
-                nsyms_++;
-                LOGF("%s@%s index in .dynsymtab = %ld\n", name.c_str(), name_.c_str(), sym - symtab_);
-                CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
-            }
-        }
+        indices = CollectSymbolsFromGnuHash(gnu_hash_);
     } else {
         CHECK(hash_);
-        const uint32_t* buckets = hash_->buckets();
-        for (size_t i = 0; i < hash_->nbuckets; ++i) {
-            int n = buckets[i];
-            Elf_Sym* sym = &symtab_[n];
-            if (sym->st_name == 0) continue;
-            const std::string name(strtab_ + sym->st_name);
-
-            nsyms_++;
-            LOGF("%s@%s index in .dynsymtab = %ld\n", name.c_str(), name_.c_str(), sym - symtab_);
-            CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
-        }
+        indices = CollectSymbolsFromElfHash(hash_);
     }
 
-    ReadDynSymtabFromReloc(rel_, num_rels_, strtab_, symtab_, &syms_);
-    ReadDynSymtabFromReloc(plt_rel_, num_plt_rels_, strtab_, symtab_, &syms_);
+    for (int idx : CollectSymbolsFromReloc(rel_, num_rels_)) indices.insert(idx);
+    for (int idx : CollectSymbolsFromReloc(plt_rel_, num_plt_rels_)) indices.insert(idx);
+
+    for (int idx : indices) {
+        // TODO(hamaji): Handle version symbols.
+        Elf_Sym* sym = &symtab_[idx];
+        if (sym->st_name == 0) continue;
+        const std::string name(strtab_ + sym->st_name);
+
+        nsyms_++;
+        LOGF("%s@%s index in .dynsym = %d\n", name.c_str(), name_.c_str(), idx);
+        CHECK(syms_.emplace(std::make_pair(name, idx), sym).second);
+    }
 
     LOGF("nsyms_ = %d\n", nsyms_);
 }
