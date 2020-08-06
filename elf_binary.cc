@@ -54,6 +54,23 @@ bool ELFBinary::InTLS(uintptr_t offset) const {
     return false;
 }
 
+namespace {
+
+void ReadDynSymtabFromReloc(const Elf_Rel* rels, size_t num, const char* strtab, Elf_Sym* symtab, std::map<std::pair<std::string, int>, Elf_Sym*>* syms) {
+    for (size_t i = 0; i < num; ++i) {
+        const Elf_Rel* rel = &rels[i];
+        const int idx = ELF_R_SYM(rel->r_info);
+        Elf_Sym* sym = &symtab[idx];
+        const std::string name(strtab + sym->st_name);
+        auto p = syms->emplace(std::make_pair(name, idx), sym);
+        if (!p.second) {
+            CHECK(idx == p.first->first.second);
+        }
+    }
+}
+
+}  // namespace
+
 void ELFBinary::ReadDynSymtab() {
     CHECK(symtab_);
     LOGF("Read dynsymtab of %s\n", name().c_str());
@@ -99,6 +116,10 @@ void ELFBinary::ReadDynSymtab() {
             CHECK(syms_.emplace(std::make_pair(name, sym - symtab_), sym).second);
         }
     }
+
+    ReadDynSymtabFromReloc(rel_, num_rels_, strtab_, symtab_, &syms_);
+    ReadDynSymtabFromReloc(plt_rel_, num_plt_rels_, strtab_, symtab_, &syms_);
+
     LOGF("nsyms_ = %d\n", nsyms_);
 }
 
