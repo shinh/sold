@@ -320,16 +320,18 @@ private:
     void EmitGnuHash(FILE* fp) {
         CHECK(ftell(fp) == GnuHashOffset());
         const Elf_GnuHash& gnu_hash = syms_.gnu_hash();
+        const std::vector<std::string>& sym_names = syms_.GetNames();
+
         Write(fp, gnu_hash.nbuckets);
         Write(fp, gnu_hash.symndx);
         Write(fp, gnu_hash.maskwords);
         Write(fp, gnu_hash.shift2);
         Elf_Addr bloom_filter = -1;
         Write(fp, bloom_filter);
-        uint32_t bucket = gnu_hash.symndx;
+        // If there is no symbols in gnu_hash_, bucket must be 0.
+        uint32_t bucket = (sym_names.size() > gnu_hash.symndx) ? gnu_hash.symndx : 0;
         Write(fp, bucket);
 
-        const std::vector<std::string>& sym_names = syms_.GetNames();
         for (size_t i = gnu_hash.symndx; i < sym_names.size(); ++i) {
             uint32_t h = CalcGnuHash(sym_names[i]) & ~1;
             if (i == sym_names.size() - 1) {
