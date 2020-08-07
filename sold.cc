@@ -29,6 +29,7 @@
 #include "strtab_builder.h"
 #include "symtab_builder.h"
 #include "utils.h"
+#include "version_builder.h"
 
 class Sold {
 public:
@@ -51,8 +52,8 @@ public:
         CopyPublicSymbols();
         Relocate();
 
-        syms_.Build(strtab_);
-        syms_.MergePublicSymbols(strtab_);
+        syms_.Build(strtab_, version_);
+        syms_.MergePublicSymbols(strtab_, version_);
 
         BuildEhdr();
         if (is_executable_) {
@@ -101,6 +102,8 @@ private:
         EmitPhdrs(fp);
         EmitGnuHash(fp);
         EmitSymtab(fp);
+        version_.EmitVersym(fp);
+        version_.EmitVerneed(fp, strtab_);
         EmitRel(fp);
         EmitArrays(fp);
         EmitStrtab(fp);
@@ -129,7 +132,11 @@ private:
 
     uintptr_t SymtabOffset() const { return GnuHashOffset() + syms_.GnuHashSize(); }
 
-    uintptr_t RelOffset() const { return SymtabOffset() + syms_.size() * sizeof(Elf_Sym); }
+    uintptr_t VersymOffset() const { return SymtabOffset() + syms_.size() * sizeof(Elf_Sym); }
+
+    uintptr_t VerneedOffset() const { return VersymOffset() + version_.SizeVersym(); }
+
+    uintptr_t RelOffset() const { return VerneedOffset() + version_.SizeVerneed(); }
 
     uintptr_t InitArrayOffset() const { return AlignNext(RelOffset() + rels_.size() * sizeof(Elf_Rel), 7); }
 
@@ -249,6 +256,10 @@ private:
         MakeDyn(DT_SYMTAB, SymtabOffset());
         MakeDyn(DT_SYMENT, sizeof(Elf_Sym));
 
+        MakeDyn(DT_VERSYM, VersymOffset());
+        MakeDyn(DT_VERNEEDNUM, version_.NumVerneed());
+        MakeDyn(DT_VERNEED, VerneedOffset());
+
         MakeDyn(DT_RELA, RelOffset());
         MakeDyn(DT_RELAENT, sizeof(Elf_Rel));
         MakeDyn(DT_RELASZ, rels_.size() * sizeof(Elf_Rel));
@@ -320,19 +331,21 @@ private:
     void EmitGnuHash(FILE* fp) {
         CHECK(ftell(fp) == GnuHashOffset());
         const Elf_GnuHash& gnu_hash = syms_.gnu_hash();
+        const std::vector<Syminfo>& exposed_syms = syms_.GetExposedSyms();
+
         Write(fp, gnu_hash.nbuckets);
         Write(fp, gnu_hash.symndx);
         Write(fp, gnu_hash.maskwords);
         Write(fp, gnu_hash.shift2);
         Elf_Addr bloom_filter = -1;
         Write(fp, bloom_filter);
-        uint32_t bucket = gnu_hash.symndx;
+        // If there is no symbols in gnu_hash_, bucket must be 0.
+        uint32_t bucket = (exposed_syms.size() > gnu_hash.symndx) ? gnu_hash.symndx : 0;
         Write(fp, bucket);
 
-        const std::vector<std::string>& sym_names = syms_.GetNames();
-        for (size_t i = gnu_hash.symndx; i < sym_names.size(); ++i) {
-            uint32_t h = CalcGnuHash(sym_names[i]) & ~1;
-            if (i == sym_names.size() - 1) {
+        for (size_t i = gnu_hash.symndx; i < exposed_syms.size(); ++i) {
+            uint32_t h = CalcGnuHash(exposed_syms[i].name) & ~1;
+            if (i == exposed_syms.size() - 1) {
                 h |= 1;
             }
             Write(fp, h);
@@ -448,13 +461,13 @@ private:
     }
 
     void CollectSymbols() {
-        std::map<std::string, Elf_Sym*> syms;
+        std::vector<Syminfo> syms;
         for (ELFBinary* bin : link_binaries_) {
-            LoadDynSymtab(bin, &syms);
+            LoadDynSymtab(bin, syms);
         }
         LOGF("CollectSymbols\n");
-        for (auto it = syms.begin(); it != syms.end(); it++) {
-            LOGF("SYM %s\n", it->first.c_str());
+        for (auto s : syms) {
+            LOGF("SYM %s\n", s.name.c_str());
         }
         syms_.SetSrcSyms(syms);
     }
@@ -492,14 +505,14 @@ private:
         return off;
     }
 
-    void LoadDynSymtab(ELFBinary* bin, std::map<std::string, Elf_Sym*>* symtab) {
+    void LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
         bin->ReadDynSymtab();
 
         uintptr_t offset = offsets_[bin];
 
         for (const auto& p : bin->GetSymbolMap()) {
-            const std::string& name = p.first.first;
-            Elf_Sym* sym = p.second;
+            const std::string& name = p.name;
+            Elf_Sym* sym = p.sym;
             if (IsTLS(*sym)) {
                 sym->st_value = RemapTLS("symbol", bin, sym->st_value);
             } else if (sym->st_value) {
@@ -507,13 +520,22 @@ private:
             }
             LOGF("Symbol %s@%s %08lx\n", name.c_str(), bin->name().c_str(), sym->st_value);
 
-            auto inserted = symtab->emplace(name, sym);
-            if (!inserted.second) {
-                Elf_Sym* sym2 = inserted.first->second;
+            Syminfo* found = NULL;
+            for (int i = 0; i < symtab.size(); i++) {
+                if (symtab[i].name == p.name && symtab[i].soname == p.soname && symtab[i].version == p.version) {
+                    found = &symtab[i];
+                    break;
+                }
+            }
+
+            if (found == NULL) {
+                symtab.push_back(p);
+            } else {
+                Elf_Sym* sym2 = found->sym;
                 int prio = IsDefined(*sym) ? 2 : ELF_ST_BIND(sym->st_info) == STB_WEAK;
                 int prio2 = IsDefined(*sym2) ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
                 if (prio > prio2) {
-                    inserted.first->second = sym;
+                    found->sym = sym;
                 }
             }
         }
@@ -521,19 +543,19 @@ private:
 
     void CopyPublicSymbols() {
         for (const auto& p : main_binary_->GetSymbolMap()) {
-            const Elf_Sym* sym = p.second;
+            const Elf_Sym* sym = p.sym;
             if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
-                LOGF("Copy public symbol %s\n", p.first.first.c_str());
-                syms_.AddPublicSymbol(p.first.first, *sym);
+                LOGF("Copy public symbol %s\n", p.name.c_str());
+                syms_.AddPublicSymbol(p);
             }
         }
         for (ELFBinary* bin : link_binaries_) {
             if (bin == main_binary_.get()) continue;
             for (const auto& p : bin->GetSymbolMap()) {
-                const Elf_Sym* sym = p.second;
+                const Elf_Sym* sym = p.sym;
                 if (IsTLS(*sym)) {
-                    LOGF("Copy TLS symbol %s\n", p.first.first.c_str());
-                    syms_.AddPublicSymbol(p.first.first, *sym);
+                    LOGF("Copy TLS symbol %s\n", p.name.c_str());
+                    syms_.AddPublicSymbol(p);
                 }
             }
         }
@@ -562,6 +584,8 @@ private:
 
     void RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
         const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
+        auto [filename, version_name] = bin->GetVerneed(ELF_R_SYM(rel->r_info));
+
         int type = ELF_R_TYPE(rel->r_info);
         const uintptr_t addend = rel->r_addend;
         Elf_Rel newrel = *rel;
@@ -586,7 +610,7 @@ private:
             case R_X86_64_GLOB_DAT:
             case R_X86_64_JUMP_SLOT: {
                 uintptr_t val_or_index;
-                if (syms_.Resolve(bin->Str(sym->st_name), val_or_index)) {
+                if (syms_.Resolve(bin->Str(sym->st_name), filename, version_name, val_or_index)) {
                     newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                     newrel.r_addend = val_or_index;
                 } else {
@@ -597,7 +621,7 @@ private:
 
             case R_X86_64_64: {
                 uintptr_t val_or_index;
-                if (syms_.Resolve(bin->Str(sym->st_name), val_or_index)) {
+                if (syms_.Resolve(bin->Str(sym->st_name), filename, version_name, val_or_index)) {
                     newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                     newrel.r_addend += val_or_index;
                 } else {
@@ -610,7 +634,7 @@ private:
             case R_X86_64_DTPOFF64:
             case R_X86_64_COPY: {
                 const std::string name = bin->Str(sym->st_name);
-                uintptr_t index = syms_.ResolveCopy(name);
+                uintptr_t index = syms_.ResolveCopy(name, filename, version_name);
                 newrel.r_info = ELF_R_INFO(index, type);
                 break;
             }
@@ -723,10 +747,9 @@ private:
 
     static bool ShouldLink(const std::string& soname) {
         // TODO(hamaji): Make this customizable.
-        std::vector<std::string> nolink_prefixes = {
-            "libc.so",     "libm.so",      "libdl.so",   "librt.so", "libpthread.so",
-            "libgcc_s.so", "libstdc++.so", "libgomp.so", "ld-linux", "libcuda.so",
-        };
+        // TODO(akawashiro): Add libmax.so for test verneed function. I will remove it after implementing --exclude option.
+        std::vector<std::string> nolink_prefixes = {"libc.so",      "libm.so",    "libdl.so", "librt.so",   "libpthread.so", "libgcc_s.so",
+                                                    "libstdc++.so", "libgomp.so", "ld-linux", "libcuda.so", "libmax.so"};
         for (const std::string& prefix : nolink_prefixes) {
             if (HasPrefix(soname, prefix)) {
                 return false;
@@ -756,6 +779,7 @@ private:
     SymtabBuilder syms_;
     std::vector<Elf_Rel> rels_;
     StrtabBuilder strtab_;
+    VersionBuilder version_;
     Elf_Ehdr ehdr_;
     std::vector<Load> loads_;
     std::vector<Elf_Dyn> dynamic_;

@@ -60,6 +60,14 @@ bool IsDefined(const Elf_Sym& sym);
 
 class ELFBinary;
 
+struct Syminfo {
+    std::string name;
+    std::string soname;
+    std::string version;
+    Elf_Versym versym;
+    Elf_Sym* sym;
+};
+
 struct TLS {
     struct Data {
         ELFBinary* bin;
