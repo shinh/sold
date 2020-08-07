@@ -25,7 +25,7 @@ public:
     void EmitVerneed(FILE* fp, StrtabBuilder& strtab);
 
 private:
-    // vernum is start from 2 because 0 and 1 are used as VER_NDX_LOCAL	and VER_NDX_GLOBAL.
+    // vernum starts from 2 because 0 and 1 are used as VER_NDX_LOCAL and VER_NDX_GLOBAL.
     int vernum = 2;
     std::map<std::string, std::map<std::string, int>> data;
     std::vector<Elf_Versym> vers;
