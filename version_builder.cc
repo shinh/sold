@@ -4,11 +4,8 @@ void VersionBuilder::Add(Elf_Versym versym, std::string soname, std::string vers
     if (soname != "") strtab.Add(soname);
     if (version != "") strtab.Add(version);
 
-    if (versym == VER_NDX_LOCAL) {
-        LOGF("VersionBuilder::VER_NDX_LOCAL\n");
-        vers.push_back(versym);
-    } else if (versym == VER_NDX_GLOBAL) {
-        LOGF("VersionBuilder::VER_NDX_GLOBAL\n");
+    if (is_special_ver_ndx(versym)) {
+        LOGF("VersionBuilder::%s\n", special_ver_ndx_to_str(versym).c_str());
         vers.push_back(versym);
     } else if (versym == NEED_NEW_VERNUM) {
         if (data.find(soname) != data.end()) {

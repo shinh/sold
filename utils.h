@@ -74,3 +74,7 @@ struct TLS {
     uintptr_t filesz{0};
     uintptr_t memsz{0};
 };
+
+bool is_special_ver_ndx(Elf64_Versym v);
+
+std::string special_ver_ndx_to_str(Elf64_Versym v);

@@ -184,10 +184,8 @@ void ELFBinary::PrintVersyms() {
     if (!versym_ || !nsyms_) return;
 
     for (int i = 0; i < nsyms_ + 1; i++) {
-        if (versym_[i] == VER_NDX_LOCAL) {
-            LOGF("VERSYM: VER_NDX_LOCAL\n");
-        } else if (versym_[i] == VER_NDX_GLOBAL) {
-            LOGF("VERSYM: VER_NDX_GLOBAL\n");
+        if (is_special_ver_ndx(versym_[i])) {
+            LOGF("VERSYM: %s\n", special_ver_ndx_to_str(versym_[i]).c_str());
         } else {
             LOGF("VERSYM: %d\n", versym_[i]);
         }
@@ -212,10 +210,8 @@ void ELFBinary::PrintVerneeds() {
 
 std::string ELFBinary::ShowVersym(int index) {
     CHECK(0 < index && index <= nsyms_ + 1);
-    if (versym_[index] == VER_NDX_LOCAL) {
-        return std::string("VER_NDX_LOCAL");
-    } else if (versym_[index] == VER_NDX_GLOBAL) {
-        return std::string("VER_NDX_GLOBAL");
+    if (is_special_ver_ndx(versym_[index])) {
+        return special_ver_ndx_to_str(versym_[index]);
     } else {
         CHECK(verneed_);
         Elf_Verneed* vn = verneed_;
