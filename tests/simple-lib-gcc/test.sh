@@ -5,4 +5,5 @@ gcc -Wl,--hash-style=gnu -shared -Wl,-soname,libmax.so -o libmax.so libmax.o
 gcc -Wl,--hash-style=gnu -o main main.c libmax.so
 
 LD_LIBRARY_PATH=. ../../build/sold main main.out
+../../build/print_dynsymtab main.out
 LD_LIBRARY_PATH=. ./main.out
