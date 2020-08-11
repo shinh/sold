@@ -29,3 +29,18 @@ bool IsTLS(const Elf_Sym& sym) {
 bool IsDefined(const Elf_Sym& sym) {
     return sym.st_value || IsTLS(sym);
 }
+
+bool is_special_ver_ndx(Elf64_Versym versym) {
+    return (versym == VER_NDX_LOCAL || versym == VER_NDX_GLOBAL);
+}
+
+std::string special_ver_ndx_to_str(Elf64_Versym versym) {
+    if (versym == VER_NDX_LOCAL) {
+        return std::string("VER_NDX_LOCAL");
+    } else if (versym == VER_NDX_GLOBAL) {
+        return std::string("VER_NDX_GLOBAL");
+    } else {
+        LOGF("This versym (= %d) is not special.\n", versym);
+        exit(1);
+    }
+}

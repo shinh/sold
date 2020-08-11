@@ -11,6 +11,8 @@
 #include <set>
 #include <sstream>
 
+#include "version_builder.h"
+
 ELFBinary::ELFBinary(const std::string& filename, int fd, char* head, size_t size)
     : filename_(filename), fd_(fd), head_(head), size_(size) {
     ehdr_ = reinterpret_cast<Elf_Ehdr*>(head);
@@ -125,7 +127,12 @@ void ELFBinary::ReadDynSymtab() {
 
         nsyms_++;
         LOGF("%s@%s index in .dynsym = %d\n", name.c_str(), name_.c_str(), idx);
-        CHECK(syms_.emplace(std::make_pair(name, idx), sym).second);
+
+        // Get version information coresspoinds to idx
+        auto p = GetVerneed(idx);
+        Elf_Versym v = (versym_) ? versym_[idx] : -1;
+
+        syms_.push_back(Syminfo{name, p.first, p.second, v, sym});
     }
 
     LOGF("nsyms_ = %d\n", nsyms_);
@@ -146,14 +153,46 @@ const Elf_Phdr& ELFBinary::GetPhdr(uint64_t type) {
     return *phdr;
 }
 
+// GetVerneed returns (soname, version)
+std::pair<std::string, std::string> ELFBinary::GetVerneed(int index) {
+    LOGF("GetVerneed\n");
+    if (!versym_) {
+        return std::make_pair("", "");
+    }
+
+    LOGF("GetVerneed versym_[index] = %d\n", versym_[index]);
+
+    if (is_special_ver_ndx(versym_[index])) {
+        return std::make_pair("", "");
+    } else {
+        CHECK(verneed_);
+        Elf_Verneed* vn = verneed_;
+        for (int i = 0; i < verneednum_; ++i) {
+            LOGF("VERNEED: ver=%d cnt=%d file=%s aux=%d next=%d\n", vn->vn_version, vn->vn_cnt, strtab_ + vn->vn_file, vn->vn_aux,
+                 vn->vn_next);
+            Elf_Vernaux* vna = (Elf_Vernaux*)((char*)vn + vn->vn_aux);
+            for (int j = 0; j < vn->vn_cnt; ++j) {
+                LOGF(" VERNAUX: hash=%d flags=%d other=%d name=%s next=%d\n", vna->vna_hash, vna->vna_flags, vna->vna_other,
+                     strtab_ + vna->vna_name, vna->vna_next);
+                if (vna->vna_other == versym_[index]) {
+                    return std::make_pair(std::string(strtab_ + vn->vn_file), std::string(strtab_ + vna->vna_name));
+                }
+
+                vna = (Elf_Vernaux*)((char*)vna + vna->vna_next);
+            }
+            vn = (Elf_Verneed*)((char*)vn + vn->vn_next);
+        }
+        LOGF("Failed to find Elf_Vernaux corresponds to %d\n", versym_[index]);
+        return std::make_pair("", "");
+    }
+}
+
 void ELFBinary::PrintVersyms() {
     if (!versym_ || !nsyms_) return;
 
     for (int i = 0; i < nsyms_ + 1; i++) {
-        if (versym_[i] == VER_NDX_LOCAL) {
-            LOGF("VERSYM: VER_NDX_LOCAL\n");
-        } else if (versym_[i] == VER_NDX_GLOBAL) {
-            LOGF("VERSYM: VER_NDX_GLOBAL\n");
+        if (is_special_ver_ndx(versym_[i])) {
+            LOGF("VERSYM: %s\n", special_ver_ndx_to_str(versym_[i]).c_str());
         } else {
             LOGF("VERSYM: %d\n", versym_[i]);
         }
@@ -178,10 +217,8 @@ void ELFBinary::PrintVerneeds() {
 
 std::string ELFBinary::ShowVersym(int index) {
     CHECK(0 < index && index <= nsyms_ + 1);
-    if (versym_[index] == VER_NDX_LOCAL) {
-        return std::string("VER_NDX_LOCAL");
-    } else if (versym_[index] == VER_NDX_GLOBAL) {
-        return std::string("VER_NDX_GLOBAL");
+    if (is_special_ver_ndx(versym_[index])) {
+        return special_ver_ndx_to_str(versym_[index]);
     } else {
         CHECK(verneed_);
         Elf_Verneed* vn = verneed_;
@@ -324,20 +361,21 @@ Elf_Addr ELFBinary::OffsetFromAddr(Elf_Addr addr) {
 
 std::string ELFBinary::ShowDynSymtab() {
     LOGF("ShowDynSymtab\n");
-    std::vector<std::string> res(syms_.size() + 1);
+    std::stringstream ss;
     for (auto it : syms_) {
-        std::stringstream ss;
-        ss << it.first.second << ": " << it.first.first << " ";
+        ss << it.name << ": ";
 
-        if (versym_) {
-            ss << ShowVersym(it.first.second) << "\n";
+        if (it.versym == VersionBuilder::NEED_NEW_VERNUM) {
+            ss << "NO_VERSION_INFO";
+        } else if (is_special_ver_ndx(it.versym)) {
+            ss << special_ver_ndx_to_str(it.versym);
         } else {
-            ss << "NO_VERSION_INFO\n";
+            ss << it.soname << " " << it.version;
         }
-        res[it.first.second] = ss.str();
+        ss << "\n";
     }
 
-    return std::accumulate(res.begin(), res.end(), std::string(""));
+    return ss.str();
 }
 
 std::string ELFBinary::ShowDtRela() {
