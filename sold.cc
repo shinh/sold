@@ -2,6 +2,7 @@
 #include <elf.h>
 #include <err.h>
 #include <fcntl.h>
+#include <getopt.h>
 #include <libgen.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -33,7 +35,7 @@
 
 class Sold {
 public:
-    Sold(const std::string& elf_filename) {
+    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos) : exclude_sos_(exclude_sos) {
         main_binary_ = ReadELF(elf_filename);
         is_executable_ = main_binary_->FindPhdr(PT_INTERP);
         link_binaries_.push_back(main_binary_.get());
@@ -745,16 +747,20 @@ private:
         return (st.st_mode & S_IFMT) & S_IFREG;
     }
 
-    static bool ShouldLink(const std::string& soname) {
-        // TODO(hamaji): Make this customizable.
-        // TODO(akawashiro): Add libmax.so for test verneed function. I will remove it after implementing --exclude option.
-        std::vector<std::string> nolink_prefixes = {"libc.so",      "libm.so",    "libdl.so", "librt.so",   "libpthread.so", "libgcc_s.so",
-                                                    "libstdc++.so", "libgomp.so", "ld-linux", "libcuda.so", "libmax.so"};
+    bool ShouldLink(const std::string& soname) {
+        std::vector<std::string> nolink_prefixes = {"libc.so",     "libm.so",      "libdl.so",   "librt.so", "libpthread.so",
+                                                    "libgcc_s.so", "libstdc++.so", "libgomp.so", "ld-linux", "libcuda.so"};
         for (const std::string& prefix : nolink_prefixes) {
             if (HasPrefix(soname, prefix)) {
                 return false;
             }
         }
+        for (const std::string& prefix : exclude_sos_) {
+            if (HasPrefix(soname, prefix)) {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -768,6 +774,7 @@ private:
 
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
+    std::vector<std::string> exclude_sos_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
@@ -788,12 +795,61 @@ private:
     TLS tls_;
 };
 
-int main(int argc, const char* argv[]) {
-    if (argc <= 2) {
-        LOGF("Usage: %s <in-elf> <out-elf>\n", argv[0]);
+void print_help(std::ostream& os) {
+    os << R"(usage: sold [option] [input]
+Options:
+-h, --help                      Show this help message and exit
+-o, --output-file OUTPUT_FILE   Specify the ELF file to output (this option is mandatory)
+-i, --input-file INPUT_FILE     Specify the ELF file to output
+-e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
+
+The last argument is interpreted as SOURCE_FILE when -i option isn't given.
+)" << std::endl;
+}
+
+int main(int argc, char* const argv[]) {
+    static option long_options[] = {
+        {"help", no_argument, nullptr, 'h'},
+        {"input-file", required_argument, nullptr, 'i'},
+        {"output-file", required_argument, nullptr, 'o'},
+        {"exclude-so", required_argument, nullptr, 'e'},
+        {0, 0, 0, 0},
+    };
+
+    std::string input_file;
+    std::string output_file;
+    std::vector<std::string> exclude_sos;
+
+    int opt;
+    while ((opt = getopt_long(argc, argv, "hi:o:e:", long_options, nullptr)) != -1) {
+        switch (opt) {
+            case 'e':
+                exclude_sos.push_back(optarg);
+                break;
+            case 'i':
+                input_file = optarg;
+                break;
+            case 'o':
+                output_file = optarg;
+                break;
+            case 'h':
+                print_help(std::cout);
+                return 0;
+            case '?':
+                print_help(std::cerr);
+                return 1;
+        }
+    }
+
+    if (optind < argc && input_file.empty()) {
+        input_file = argv[optind++];
+    }
+
+    if (output_file == "") {
+        std::cerr << "You must specify the output file." << std::endl;
         return 1;
     }
 
-    Sold sold(argv[1]);
-    sold.Link(argv[2]);
+    Sold sold(input_file, exclude_sos);
+    sold.Link(output_file);
 }
