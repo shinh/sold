@@ -1,5 +1,7 @@
 #include "utils.h"
 
+bool QUIET_LOG{false};
+
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep) {
     std::vector<std::string> ret;
     if (str.empty()) return ret;
