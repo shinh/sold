@@ -104,8 +104,8 @@ private:
         EmitPhdrs(fp);
         EmitGnuHash(fp);
         EmitSymtab(fp);
-        version_.EmitVersym(fp);
-        version_.EmitVerneed(fp, strtab_);
+        EmitVersym(fp);
+        EmitVerneed(fp);
         EmitRel(fp);
         EmitArrays(fp);
         EmitStrtab(fp);
@@ -130,23 +130,55 @@ private:
         return num_phdrs;
     }
 
-    uintptr_t GnuHashOffset() const { return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum; }
+    uintptr_t GnuHashOffset() const { return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * CountPhdrs(); }
+    uintptr_t GnuHashSize() const { return syms_.GnuHashSize(); }
 
-    uintptr_t SymtabOffset() const { return GnuHashOffset() + syms_.GnuHashSize(); }
+    uintptr_t SymtabOffset() const { return GnuHashOffset() + GnuHashSize(); }
+    uintptr_t SymtabSize() const { return syms_.size() * sizeof(Elf_Sym); }
 
-    uintptr_t VersymOffset() const { return SymtabOffset() + syms_.size() * sizeof(Elf_Sym); }
+    uintptr_t VersymOffset() const { return SymtabOffset() + SymtabSize(); }
+    uintptr_t VersymSize() const { return version_.SizeVersym(); }
 
-    uintptr_t VerneedOffset() const { return VersymOffset() + version_.SizeVersym(); }
+    uintptr_t VerneedOffset() const { return VersymOffset() + VersymSize(); }
+    uintptr_t VerneedSize() const { return version_.SizeVerneed(); }
 
-    uintptr_t RelOffset() const { return VerneedOffset() + version_.SizeVerneed(); }
+    uintptr_t RelOffset() const { return VerneedOffset() + VerneedSize(); }
+    uintptr_t RelSize() const { return rels_.size() * sizeof(Elf_Rel); }
 
-    uintptr_t InitArrayOffset() const { return AlignNext(RelOffset() + rels_.size() * sizeof(Elf_Rel), 7); }
+    uintptr_t InitArrayOffset() const { return AlignNext(RelOffset() + RelSize(), 7); }
+    uintptr_t InitArraySize() const { return sizeof(uintptr_t) * init_array_.size(); }
 
-    uintptr_t FiniArrayOffset() const { return InitArrayOffset() + sizeof(uintptr_t) * init_array_.size(); }
+    uintptr_t FiniArrayOffset() const { return InitArrayOffset() + InitArraySize(); }
+    uintptr_t FiniArraySize() const { return sizeof(uintptr_t) * fini_array_.size(); }
 
-    uintptr_t StrtabOffset() const { return FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size(); }
+    uintptr_t StrtabOffset() const { return FiniArrayOffset() + FiniArraySize(); }
+    uintptr_t StrtabSize() const { return strtab_.size(); }
 
-    uintptr_t DynamicOffset() const { return StrtabOffset() + strtab_.size(); }
+    uintptr_t DynamicOffset() const { return StrtabOffset() + StrtabSize(); }
+    uintptr_t DynamicSize() const { return sizeof(Elf_Dyn) * dynamic_.size(); }
+
+    uintptr_t ShstrtabOffset() const { return DynamicOffset() + DynamicSize(); }
+    uintptr_t ShstrtabSize() const { return shdr_.ShstrtabSize(); }
+
+    uintptr_t CodeOffset() const { return AlignNext(ShstrtabOffset() + ShstrtabSize()); }
+    uintptr_t CodeSize() {
+        uintptr_t p = 0;
+        for (const Load& load : loads_) {
+            ELFBinary* bin = load.bin;
+            Elf_Phdr* phdr = load.orig;
+            p += (load.emit.p_offset + phdr->p_filesz);
+        }
+        return p;
+    }
+
+    uintptr_t TLSOffset() const { return tls_file_offset_; }
+    uintptr_t TLSSize() const {
+        uintptr_t s = 0;
+        for (const TLS::Data& data : tls_.data) {
+            s += data.size;
+        }
+        return s;
+    }
 
     uintptr_t CodeOffset() const { return AlignNext(DynamicOffset() + sizeof(Elf_Dyn) * dynamic_.size()); }
 
@@ -361,6 +393,16 @@ private:
         }
     }
 
+    void EmitVersym(FILE* fp) {
+        CHECK(ftell(fp) == VersymOffset());
+        version_.EmitVersym(fp);
+    }
+
+    void EmitVerneed(FILE* fp) {
+        CHECK(ftell(fp) == VerneedOffset());
+        version_.EmitVerneed(fp, strtab_);
+    }
+
     void EmitStrtab(FILE* fp) {
         CHECK(ftell(fp) == StrtabOffset());
         WriteBuf(fp, strtab_.data(), strtab_.size());
@@ -392,6 +434,7 @@ private:
     }
 
     void EmitCode(FILE* fp) {
+        CHECK(ftell(fp) == CodeOffset());
         for (const Load& load : loads_) {
             ELFBinary* bin = load.bin;
             Elf_Phdr* phdr = load.orig;
@@ -403,6 +446,7 @@ private:
 
     void EmitTLS(FILE* fp) {
         EmitPad(fp, tls_file_offset_);
+        CHECK(ftell(fp) == TLSOffset());
         for (TLS::Data data : tls_.data) {
             WriteBuf(fp, data.start, data.size);
         }
