@@ -28,6 +28,7 @@
 #include "elf_binary.h"
 #include "hash.h"
 #include "ldsoconf.h"
+#include "shdr_builder.h"
 #include "strtab_builder.h"
 #include "symtab_builder.h"
 #include "utils.h"
@@ -57,7 +58,7 @@ public:
         syms_.Build(strtab_, version_);
         syms_.MergePublicSymbols(strtab_, version_);
 
-        BuildEhdr();
+        // BuildEhdr();
         if (is_executable_) {
             BuildInterp();
         }
@@ -66,6 +67,22 @@ public:
 
         strtab_.Freeze();
         BuildLoads();
+
+        shdr_.RegisterShdr(GnuHashOffset(), GnuHashSize(), ShdrBuilder::ShdrType::GnuHash);
+        shdr_.RegisterShdr(SymtabOffset(), SymtabSize(), ShdrBuilder::ShdrType::Dynsym, sizeof(Elf_Sym));
+        shdr_.RegisterShdr(VersymOffset(), VersymSize(), ShdrBuilder::ShdrType::GnuVersion, sizeof(Elf_Versym));
+        shdr_.RegisterShdr(VerneedOffset(), VerneedSize(), ShdrBuilder::ShdrType::GnuVersionR);
+        shdr_.RegisterShdr(RelOffset(), RelSize(), ShdrBuilder::ShdrType::RelaDyn, sizeof(Elf_Rel));
+        shdr_.RegisterShdr(InitArrayOffset(), InitArraySize(), ShdrBuilder::ShdrType::Init);
+        shdr_.RegisterShdr(FiniArrayOffset(), FiniArraySize(), ShdrBuilder::ShdrType::Fini);
+        shdr_.RegisterShdr(StrtabOffset(), StrtabSize(), ShdrBuilder::ShdrType::Dynstr);
+        shdr_.RegisterShdr(DynamicOffset(), DynamicSize(), ShdrBuilder::ShdrType::Dynamic, sizeof(Elf_Dyn));
+        shdr_.RegisterShdr(ShstrtabOffset(), ShstrtabSize(), ShdrBuilder::ShdrType::Shstrtab);
+        // TODO(akawashiro) .text and .tls
+        shdr_.Freeze();
+
+        // We must call BuildEhdr at the last because of e_shoff
+        BuildEhdr();
 
         Emit(out_filename);
         CHECK(chmod(out_filename.c_str(), 0755) == 0);
@@ -110,10 +127,14 @@ private:
         EmitArrays(fp);
         EmitStrtab(fp);
         EmitDynamic(fp);
+        EmitShstrtab(fp);
         EmitAlign(fp);
 
         EmitCode(fp);
         EmitTLS(fp);
+
+        EmitShdr(fp);
+
         fclose(fp);
     }
 
@@ -180,14 +201,16 @@ private:
         return s;
     }
 
-    uintptr_t CodeOffset() const { return AlignNext(DynamicOffset() + sizeof(Elf_Dyn) * dynamic_.size()); }
+    uintptr_t ShdrOffset() const { return TLSOffset() + TLSSize(); }
 
+    // You must call this function after building all stuffs
+    // because ShdrOffset() cannot be fixed before it.
     void BuildEhdr() {
         ehdr_ = *main_binary_->ehdr();
         ehdr_.e_entry += offsets_[main_binary_.get()];
-        ehdr_.e_shoff = 0;
-        ehdr_.e_shnum = 0;
-        ehdr_.e_shstrndx = 0;
+        ehdr_.e_shoff = ShdrOffset();
+        ehdr_.e_shnum = shdr_.CountShdrs();
+        ehdr_.e_shstrndx = shdr_.Shstrndx();
         ehdr_.e_phnum = CountPhdrs();
     }
 
@@ -426,6 +449,11 @@ private:
         }
     }
 
+    void EmitShstrtab(FILE* fp) {
+        CHECK(ftell(fp) == ShstrtabOffset());
+        shdr_.EmitShstrtab(fp);
+    }
+
     void EmitDynamic(FILE* fp) {
         CHECK(ftell(fp) == DynamicOffset());
         for (const Elf_Dyn& dyn : dynamic_) {
@@ -450,6 +478,11 @@ private:
         for (TLS::Data data : tls_.data) {
             WriteBuf(fp, data.start, data.size);
         }
+    }
+
+    void EmitShdr(FILE* fp) {
+        CHECK(ftell(fp) == ShdrOffset());
+        shdr_.EmitShdrs(fp);
     }
 
     void DecideOffsets() {
@@ -831,6 +864,7 @@ private:
     std::vector<Elf_Rel> rels_;
     StrtabBuilder strtab_;
     VersionBuilder version_;
+    ShdrBuilder shdr_;
     Elf_Ehdr ehdr_;
     std::vector<Load> loads_;
     std::vector<Elf_Dyn> dynamic_;
