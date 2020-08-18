@@ -43,7 +43,7 @@ add_subdirectory(tests)
 foreach(t exe hash)
   add_custom_command(
     OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
-    COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" -o "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
+    COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" -o "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"  --section-headers 
     DEPENDS sold test_${t}
     )
 

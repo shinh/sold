@@ -36,7 +36,8 @@
 
 class Sold {
 public:
-    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos) : exclude_sos_(exclude_sos) {
+    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, bool emit_section_header)
+        : exclude_sos_(exclude_sos), emit_section_header_(emit_section_header) {
         main_binary_ = ReadELF(elf_filename);
         is_executable_ = main_binary_->FindPhdr(PT_INTERP);
         link_binaries_.push_back(main_binary_.get());
@@ -133,7 +134,7 @@ private:
         EmitCode(fp);
         EmitTLS(fp);
 
-        EmitShdr(fp);
+        if (emit_section_header_) EmitShdr(fp);
 
         fclose(fp);
     }
@@ -858,6 +859,7 @@ private:
     uintptr_t tls_file_offset_{0};
     uintptr_t tls_offset_{0};
     bool is_executable_{false};
+    bool emit_section_header_;
 
     uintptr_t interp_offset_;
     SymtabBuilder syms_;
@@ -880,6 +882,7 @@ Options:
 -o, --output-file OUTPUT_FILE   Specify the ELF file to output (this option is mandatory)
 -i, --input-file INPUT_FILE     Specify the ELF file to output
 -e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
+--section-headers               Emit section headers
 
 The last argument is interpreted as SOURCE_FILE when -i option isn't given.
 )" << std::endl;
@@ -891,16 +894,21 @@ int main(int argc, char* const argv[]) {
         {"input-file", required_argument, nullptr, 'i'},
         {"output-file", required_argument, nullptr, 'o'},
         {"exclude-so", required_argument, nullptr, 'e'},
+        {"section-headers", no_argument, nullptr, 1},
         {0, 0, 0, 0},
     };
 
     std::string input_file;
     std::string output_file;
     std::vector<std::string> exclude_sos;
+    bool emit_section_header = false;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "hi:o:e:", long_options, nullptr)) != -1) {
         switch (opt) {
+            case 1:
+                emit_section_header = true;
+                break;
             case 'e':
                 exclude_sos.push_back(optarg);
                 break;
@@ -928,6 +936,6 @@ int main(int argc, char* const argv[]) {
         return 1;
     }
 
-    Sold sold(input_file, exclude_sos);
+    Sold sold(input_file, exclude_sos, emit_section_header);
     sold.Link(output_file);
 }
