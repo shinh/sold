@@ -28,6 +28,7 @@
 #include "elf_binary.h"
 #include "hash.h"
 #include "ldsoconf.h"
+#include "shdr_builder.h"
 #include "strtab_builder.h"
 #include "symtab_builder.h"
 #include "utils.h"
@@ -35,7 +36,8 @@
 
 class Sold {
 public:
-    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos) : exclude_sos_(exclude_sos) {
+    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, bool emit_section_header)
+        : exclude_sos_(exclude_sos), emit_section_header_(emit_section_header) {
         main_binary_ = ReadELF(elf_filename);
         is_executable_ = main_binary_->FindPhdr(PT_INTERP);
         link_binaries_.push_back(main_binary_.get());
@@ -57,7 +59,7 @@ public:
         syms_.Build(strtab_, version_);
         syms_.MergePublicSymbols(strtab_, version_);
 
-        BuildEhdr();
+        // BuildEhdr();
         if (is_executable_) {
             BuildInterp();
         }
@@ -66,6 +68,22 @@ public:
 
         strtab_.Freeze();
         BuildLoads();
+
+        shdr_.RegisterShdr(GnuHashOffset(), GnuHashSize(), ShdrBuilder::ShdrType::GnuHash);
+        shdr_.RegisterShdr(SymtabOffset(), SymtabSize(), ShdrBuilder::ShdrType::Dynsym, sizeof(Elf_Sym));
+        shdr_.RegisterShdr(VersymOffset(), VersymSize(), ShdrBuilder::ShdrType::GnuVersion, sizeof(Elf_Versym));
+        shdr_.RegisterShdr(VerneedOffset(), VerneedSize(), ShdrBuilder::ShdrType::GnuVersionR);
+        shdr_.RegisterShdr(RelOffset(), RelSize(), ShdrBuilder::ShdrType::RelaDyn, sizeof(Elf_Rel));
+        shdr_.RegisterShdr(InitArrayOffset(), InitArraySize(), ShdrBuilder::ShdrType::Init);
+        shdr_.RegisterShdr(FiniArrayOffset(), FiniArraySize(), ShdrBuilder::ShdrType::Fini);
+        shdr_.RegisterShdr(StrtabOffset(), StrtabSize(), ShdrBuilder::ShdrType::Dynstr);
+        shdr_.RegisterShdr(DynamicOffset(), DynamicSize(), ShdrBuilder::ShdrType::Dynamic, sizeof(Elf_Dyn));
+        shdr_.RegisterShdr(ShstrtabOffset(), ShstrtabSize(), ShdrBuilder::ShdrType::Shstrtab);
+        // TODO(akawashiro) .text and .tls
+        shdr_.Freeze();
+
+        // We must call BuildEhdr at the last because of e_shoff
+        BuildEhdr();
 
         Emit(out_filename);
         CHECK(chmod(out_filename.c_str(), 0755) == 0);
@@ -104,16 +122,20 @@ private:
         EmitPhdrs(fp);
         EmitGnuHash(fp);
         EmitSymtab(fp);
-        version_.EmitVersym(fp);
-        version_.EmitVerneed(fp, strtab_);
+        EmitVersym(fp);
+        EmitVerneed(fp);
         EmitRel(fp);
         EmitArrays(fp);
         EmitStrtab(fp);
         EmitDynamic(fp);
+        EmitShstrtab(fp);
         EmitAlign(fp);
 
         EmitCode(fp);
         EmitTLS(fp);
+
+        if (emit_section_header_) EmitShdr(fp);
+
         fclose(fp);
     }
 
@@ -130,32 +152,66 @@ private:
         return num_phdrs;
     }
 
-    uintptr_t GnuHashOffset() const { return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * ehdr_.e_phnum; }
+    uintptr_t GnuHashOffset() const { return sizeof(Elf_Ehdr) + sizeof(Elf_Phdr) * CountPhdrs(); }
+    uintptr_t GnuHashSize() const { return syms_.GnuHashSize(); }
 
-    uintptr_t SymtabOffset() const { return GnuHashOffset() + syms_.GnuHashSize(); }
+    uintptr_t SymtabOffset() const { return GnuHashOffset() + GnuHashSize(); }
+    uintptr_t SymtabSize() const { return syms_.size() * sizeof(Elf_Sym); }
 
-    uintptr_t VersymOffset() const { return SymtabOffset() + syms_.size() * sizeof(Elf_Sym); }
+    uintptr_t VersymOffset() const { return SymtabOffset() + SymtabSize(); }
+    uintptr_t VersymSize() const { return version_.SizeVersym(); }
 
-    uintptr_t VerneedOffset() const { return VersymOffset() + version_.SizeVersym(); }
+    uintptr_t VerneedOffset() const { return VersymOffset() + VersymSize(); }
+    uintptr_t VerneedSize() const { return version_.SizeVerneed(); }
 
-    uintptr_t RelOffset() const { return VerneedOffset() + version_.SizeVerneed(); }
+    uintptr_t RelOffset() const { return VerneedOffset() + VerneedSize(); }
+    uintptr_t RelSize() const { return rels_.size() * sizeof(Elf_Rel); }
 
-    uintptr_t InitArrayOffset() const { return AlignNext(RelOffset() + rels_.size() * sizeof(Elf_Rel), 7); }
+    uintptr_t InitArrayOffset() const { return AlignNext(RelOffset() + RelSize(), 7); }
+    uintptr_t InitArraySize() const { return sizeof(uintptr_t) * init_array_.size(); }
 
-    uintptr_t FiniArrayOffset() const { return InitArrayOffset() + sizeof(uintptr_t) * init_array_.size(); }
+    uintptr_t FiniArrayOffset() const { return InitArrayOffset() + InitArraySize(); }
+    uintptr_t FiniArraySize() const { return sizeof(uintptr_t) * fini_array_.size(); }
 
-    uintptr_t StrtabOffset() const { return FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size(); }
+    uintptr_t StrtabOffset() const { return FiniArrayOffset() + FiniArraySize(); }
+    uintptr_t StrtabSize() const { return strtab_.size(); }
 
-    uintptr_t DynamicOffset() const { return StrtabOffset() + strtab_.size(); }
+    uintptr_t DynamicOffset() const { return StrtabOffset() + StrtabSize(); }
+    uintptr_t DynamicSize() const { return sizeof(Elf_Dyn) * dynamic_.size(); }
 
-    uintptr_t CodeOffset() const { return AlignNext(DynamicOffset() + sizeof(Elf_Dyn) * dynamic_.size()); }
+    uintptr_t ShstrtabOffset() const { return DynamicOffset() + DynamicSize(); }
+    uintptr_t ShstrtabSize() const { return shdr_.ShstrtabSize(); }
 
+    uintptr_t CodeOffset() const { return AlignNext(ShstrtabOffset() + ShstrtabSize()); }
+    uintptr_t CodeSize() {
+        uintptr_t p = 0;
+        for (const Load& load : loads_) {
+            ELFBinary* bin = load.bin;
+            Elf_Phdr* phdr = load.orig;
+            p += (load.emit.p_offset + phdr->p_filesz);
+        }
+        return p;
+    }
+
+    uintptr_t TLSOffset() const { return tls_file_offset_; }
+    uintptr_t TLSSize() const {
+        uintptr_t s = 0;
+        for (const TLS::Data& data : tls_.data) {
+            s += data.size;
+        }
+        return s;
+    }
+
+    uintptr_t ShdrOffset() const { return TLSOffset() + TLSSize(); }
+
+    // You must call this function after building all stuffs
+    // because ShdrOffset() cannot be fixed before it.
     void BuildEhdr() {
         ehdr_ = *main_binary_->ehdr();
         ehdr_.e_entry += offsets_[main_binary_.get()];
-        ehdr_.e_shoff = 0;
-        ehdr_.e_shnum = 0;
-        ehdr_.e_shstrndx = 0;
+        ehdr_.e_shoff = ShdrOffset();
+        ehdr_.e_shnum = shdr_.CountShdrs();
+        ehdr_.e_shstrndx = shdr_.Shstrndx();
         ehdr_.e_phnum = CountPhdrs();
     }
 
@@ -361,6 +417,16 @@ private:
         }
     }
 
+    void EmitVersym(FILE* fp) {
+        CHECK(ftell(fp) == VersymOffset());
+        version_.EmitVersym(fp);
+    }
+
+    void EmitVerneed(FILE* fp) {
+        CHECK(ftell(fp) == VerneedOffset());
+        version_.EmitVerneed(fp, strtab_);
+    }
+
     void EmitStrtab(FILE* fp) {
         CHECK(ftell(fp) == StrtabOffset());
         WriteBuf(fp, strtab_.data(), strtab_.size());
@@ -384,6 +450,11 @@ private:
         }
     }
 
+    void EmitShstrtab(FILE* fp) {
+        CHECK(ftell(fp) == ShstrtabOffset());
+        shdr_.EmitShstrtab(fp);
+    }
+
     void EmitDynamic(FILE* fp) {
         CHECK(ftell(fp) == DynamicOffset());
         for (const Elf_Dyn& dyn : dynamic_) {
@@ -392,6 +463,7 @@ private:
     }
 
     void EmitCode(FILE* fp) {
+        CHECK(ftell(fp) == CodeOffset());
         for (const Load& load : loads_) {
             ELFBinary* bin = load.bin;
             Elf_Phdr* phdr = load.orig;
@@ -403,9 +475,15 @@ private:
 
     void EmitTLS(FILE* fp) {
         EmitPad(fp, tls_file_offset_);
+        CHECK(ftell(fp) == TLSOffset());
         for (TLS::Data data : tls_.data) {
             WriteBuf(fp, data.start, data.size);
         }
+    }
+
+    void EmitShdr(FILE* fp) {
+        CHECK(ftell(fp) == ShdrOffset());
+        shdr_.EmitShdrs(fp);
     }
 
     void DecideOffsets() {
@@ -781,12 +859,14 @@ private:
     uintptr_t tls_file_offset_{0};
     uintptr_t tls_offset_{0};
     bool is_executable_{false};
+    bool emit_section_header_;
 
     uintptr_t interp_offset_;
     SymtabBuilder syms_;
     std::vector<Elf_Rel> rels_;
     StrtabBuilder strtab_;
     VersionBuilder version_;
+    ShdrBuilder shdr_;
     Elf_Ehdr ehdr_;
     std::vector<Load> loads_;
     std::vector<Elf_Dyn> dynamic_;
@@ -802,6 +882,7 @@ Options:
 -o, --output-file OUTPUT_FILE   Specify the ELF file to output (this option is mandatory)
 -i, --input-file INPUT_FILE     Specify the ELF file to output
 -e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
+--section-headers               Emit section headers
 -q, --quiet                     Suppress log outout
 
 The last argument is interpreted as SOURCE_FILE when -i option isn't given.
@@ -814,6 +895,7 @@ int main(int argc, char* const argv[]) {
         {"input-file", required_argument, nullptr, 'i'},
         {"output-file", required_argument, nullptr, 'o'},
         {"exclude-so", required_argument, nullptr, 'e'},
+        {"section-headers", no_argument, nullptr, 1},
         {"quiet", no_argument, nullptr, 'q'},
         {0, 0, 0, 0},
     };
@@ -821,10 +903,14 @@ int main(int argc, char* const argv[]) {
     std::string input_file;
     std::string output_file;
     std::vector<std::string> exclude_sos;
+    bool emit_section_header = false;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "hi:o:e:q", long_options, nullptr)) != -1) {
         switch (opt) {
+            case 1:
+                emit_section_header = true;
+                break;
             case 'e':
                 exclude_sos.push_back(optarg);
                 break;
@@ -855,6 +941,6 @@ int main(int argc, char* const argv[]) {
         return 1;
     }
 
-    Sold sold(input_file, exclude_sos);
+    Sold sold(input_file, exclude_sos, emit_section_header);
     sold.Link(output_file);
 }

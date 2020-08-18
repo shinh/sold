@@ -15,6 +15,7 @@ add_library(
   ldsoconf.cc
   strtab_builder.cc
   symtab_builder.cc
+  shdr_builder.cc
   utils.cc
   version_builder.cc
   )
@@ -45,7 +46,7 @@ if(BUILD_TESTING)
   foreach(t exe hash)
     add_custom_target(
       test_${t}_out ALL
-      COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" -o "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
+      COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" -o "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"  --section-headers
       DEPENDS sold test_${t}
       )
 
