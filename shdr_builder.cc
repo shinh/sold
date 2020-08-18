@@ -100,6 +100,12 @@ void ShdrBuilder::RegisterShdr(Elf_Off offset, uint64_t size, ShdrType type, uin
         case Dynsym:
             shdr.sh_type = SHT_DYNSYM;
             shdr.sh_flags = SHF_ALLOC;
+
+            // TODO(akawashiro) Now, I assume the last local symbol is located at index 0.
+            // ref: https://www.sco.com/developers/gabi/1998-04-29/ch4.sheader.html#sh_link
+            // "One greater than the symbol table index of the last local symbol (binding STB_LOCAL)."
+            shdr.sh_info = 1;
+
             break;
         case GnuVersion:
             shdr.sh_type = SHT_GNU_versym;
