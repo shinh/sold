@@ -40,17 +40,19 @@ target_link_libraries(print_dynsymtab sold_lib)
 
 add_subdirectory(tests)
 
-foreach(t exe hash)
-  add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
-    COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" -o "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"  --section-headers 
-    DEPENDS sold test_${t}
-    )
+include(CTest)
 
-  add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out_stamp
-    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out
-    DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"
-    )
-  add_custom_target(run_test_${t}_out ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out_stamp)
-endforeach()
+if(BUILD_TESTING)
+  foreach(t exe hash)
+    add_custom_target(
+      test_${t}_out ALL
+      COMMAND "${CMAKE_CURRENT_BINARY_DIR}/sold" "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}" -o "${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out"  --section-headers
+      DEPENDS sold test_${t}
+      )
+
+    add_test(
+      NAME ${t}_test
+      COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out
+      )
+  endforeach()
+endif()
