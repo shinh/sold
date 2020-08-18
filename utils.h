@@ -29,16 +29,23 @@
         if (!(r)) assert(r); \
     } while (0)
 
-const bool FLAGS_LOG{true};
+const bool FLAGS_LOG{false};
+extern bool QUIET_LOG;
 
 #ifdef NOLOG
-#define LOGF(...)                                           \
-    if (0) fprintf(stderr, "%s, %d: ", __FILE__, __LINE__); \
-    fprintf(stderr, __VA_ARGS__)
+#define LOGF(...)                                               \
+    do {                                                        \
+        if (QUIET_LOG) break;                                   \
+        if (0) fprintf(stderr, "%s, %d: ", __FILE__, __LINE__); \
+        fprintf(stderr, __VA_ARGS__);                           \
+    } while(0)
 #else
-#define LOGF(...)                                                   \
-    if (FLAGS_LOG) fprintf(stderr, "%s, %d: ", __FILE__, __LINE__); \
-    fprintf(stderr, __VA_ARGS__)
+#define LOGF(...)                                                       \
+    do {                                                                \
+        if (QUIET_LOG) break;                                           \
+        if (FLAGS_LOG) fprintf(stderr, "%s, %d: ", __FILE__, __LINE__); \
+        fprintf(stderr, __VA_ARGS__);                                   \
+    } while(0)
 #endif
 
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep);

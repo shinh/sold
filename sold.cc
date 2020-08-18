@@ -802,6 +802,7 @@ Options:
 -o, --output-file OUTPUT_FILE   Specify the ELF file to output (this option is mandatory)
 -i, --input-file INPUT_FILE     Specify the ELF file to output
 -e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
+-q, --quiet                     Suppress log outout
 
 The last argument is interpreted as SOURCE_FILE when -i option isn't given.
 )" << std::endl;
@@ -813,6 +814,7 @@ int main(int argc, char* const argv[]) {
         {"input-file", required_argument, nullptr, 'i'},
         {"output-file", required_argument, nullptr, 'o'},
         {"exclude-so", required_argument, nullptr, 'e'},
+        {"quiet", no_argument, nullptr, 'q'},
         {0, 0, 0, 0},
     };
 
@@ -821,7 +823,7 @@ int main(int argc, char* const argv[]) {
     std::vector<std::string> exclude_sos;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "hi:o:e:", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hi:o:e:q", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'e':
                 exclude_sos.push_back(optarg);
@@ -835,6 +837,9 @@ int main(int argc, char* const argv[]) {
             case 'h':
                 print_help(std::cout);
                 return 0;
+            case 'q':
+                QUIET_LOG = true;
+                break;
             case '?':
                 print_help(std::cerr);
                 return 1;
