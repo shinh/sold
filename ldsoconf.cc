@@ -26,6 +26,7 @@ void read_ldsoconf_dfs(std::vector<std::string>& res, const std::string& filenam
             for (int i = 0; i < globbuf.gl_pathc; i++) {
                 read_ldsoconf_dfs(res, globbuf.gl_pathv[i]);
             }
+            globfree(&globbuf);
         } else {
             res.push_back(head);
         }
