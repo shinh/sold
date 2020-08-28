@@ -117,7 +117,7 @@ private:
 
     Elf_Versym* versym_{nullptr};
     Elf_Verneed* verneed_{nullptr};
-    Elf_Word verneednum_{0};
+    Elf_Xword verneednum_{0};
 };
 
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename);

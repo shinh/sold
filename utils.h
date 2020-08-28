@@ -16,7 +16,8 @@
 #define Elf_Off Elf64_Off
 #define Elf_Half Elf64_Half
 #define Elf_Versym Elf64_Versym
-#define Elf_Word Elf64_Xword
+#define Elf_Xword Elf64_Xword
+#define Elf_Word Elf64_Word
 #define Elf_Vernaux Elf64_Vernaux
 #define Elf_Verneed Elf64_Verneed
 #define ELF_ST_BIND(val) ELF64_ST_BIND(val)
@@ -91,6 +92,7 @@ struct TLS {
     std::map<ELFBinary*, size_t> bin_to_index;
     uintptr_t filesz{0};
     uintptr_t memsz{0};
+    Elf_Xword align{0};
 };
 
 bool is_special_ver_ndx(Elf64_Versym v);
