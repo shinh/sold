@@ -624,7 +624,7 @@ private:
     void CopyPublicSymbols() {
         for (const auto& p : main_binary_->GetSymbolMap()) {
             const Elf_Sym* sym = p.sym;
-            if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && sym->st_value && sym->st_shndx != SHN_UNDEF) {
+            if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
                 LOGF("Copy public symbol %s\n", p.name.c_str());
                 syms_.AddPublicSymbol(p);
             }
@@ -633,7 +633,7 @@ private:
             if (bin == main_binary_.get()) continue;
             for (const auto& p : bin->GetSymbolMap()) {
                 const Elf_Sym* sym = p.sym;
-                if (IsTLS(*sym) && sym->st_shndx != SHN_UNDEF) {
+                if (IsTLS(*sym)) {
                     LOGF("Copy TLS symbol %s\n", p.name.c_str());
                     syms_.AddPublicSymbol(p);
                 }
