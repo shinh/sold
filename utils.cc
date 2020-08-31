@@ -29,7 +29,7 @@ bool IsTLS(const Elf_Sym& sym) {
 }
 
 bool IsDefined(const Elf_Sym& sym) {
-    return sym.st_value || IsTLS(sym);
+    return (sym.st_value || IsTLS(sym)) && sym.st_shndx != SHN_UNDEF;
 }
 
 bool is_special_ver_ndx(Elf64_Versym versym) {

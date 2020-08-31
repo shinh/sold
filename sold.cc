@@ -593,7 +593,7 @@ private:
         for (const auto& p : bin->GetSymbolMap()) {
             const std::string& name = p.name;
             Elf_Sym* sym = p.sym;
-            if (IsTLS(*sym)) {
+            if (IsTLS(*sym) && sym->st_shndx != SHN_UNDEF) {
                 sym->st_value = RemapTLS("symbol", bin, sym->st_value);
             } else if (sym->st_value) {
                 sym->st_value += offset;
