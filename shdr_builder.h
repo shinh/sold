@@ -11,7 +11,7 @@ public:
     void EmitShdrs(FILE* fp);
     uintptr_t ShstrtabSize() const;
     Elf_Half CountShdrs() const { return shdrs.size(); }
-    void RegisterShdr(Elf_Off offset, uint64_t size, ShdrType type, uint64_t entsize = 0);
+    void RegisterShdr(Elf_Off offset, uint64_t size, ShdrType type, uint64_t entsize = 0, Elf_Word info = 0);
     Elf_Half Shstrndx() const { return shdrs.size() - 1; }
 
     // After register all shdrs, you must call Freeze.
