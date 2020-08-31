@@ -1,3 +1,1 @@
-#include <threads.h>
-
-extern thread_local int thread_local_i;
+extern __thread int thread_local_i;
