@@ -31,3 +31,7 @@ jobs:
       run: cd tests/simple-lib-g++ && ./test.sh
     - name: version-gcc
       run: cd tests/version-gcc && ./test.sh
+    - name: tls-lib-gcc
+      run: cd tests/tls-lib-gcc && ./test.sh
+    - name: tls-lib-gcc-without-base
+      run: cd tests/tls-lib-gcc-without-base && ./test.sh

@@ -394,6 +394,21 @@ std::string ELFBinary::ShowDtRela() {
     return ss.str();
 }
 
+std::string ELFBinary::ShowTLS() {
+    LOGF("ShowTLS\n");
+    std::stringstream ss;
+
+    ss << "p_offset = " << tls_->p_offset << std::endl;
+    ss << "p_vaddr = " << tls_->p_vaddr << std::endl;
+    ss << "p_paddr = " << tls_->p_paddr << std::endl;
+    ss << "p_filesz = " << tls_->p_filesz << std::endl;
+    ss << "p_memsz = " << tls_->p_memsz << std::endl;
+    ss << "p_flags = " << tls_->p_flags << std::endl;
+    ss << "p_align = " << tls_->p_align << std::endl;
+
+    return ss.str();
+}
+
 std::unique_ptr<ELFBinary> ReadELF(const std::string& filename) {
     int fd = open(filename.c_str(), O_RDONLY);
     if (fd < 0) err(1, "open failed: %s", filename.c_str());
