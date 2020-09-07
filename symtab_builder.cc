@@ -124,6 +124,10 @@ void SymtabBuilder::Build(StrtabBuilder& strtab, VersionBuilder& version) {
         CHECK(found != syms_.end());
         Elf_Sym sym = found->second.sym;
         sym.st_name = strtab.Add(s.name);
+        // TODO(akawashiro)
+        // I fill st_shndx with a dummy value which is not special section index.
+        // After I make complete section headers, I should fill it with the right section index.
+        if (sym.st_shndx != SHN_UNDEF && sym.st_shndx < SHN_LORESERVE) sym.st_shndx = 1;
         symtab_.push_back(sym);
 
         version.Add(s.versym, s.soname, s.version, strtab);
@@ -144,6 +148,9 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
         Elf_Sym* sym = new Elf_Sym;
         *sym = *p.sym;
         sym->st_name = strtab.Add(name);
+        // TODO(akawashiro)
+        // I fill st_shndx with a dummy value which is not special section index.
+        // After I make complete section headers, I should fill it with the right section index.
         sym->st_shndx = 1;
 
         Syminfo s{p.name, p.soname, p.version, VER_NDX_GLOBAL, sym};

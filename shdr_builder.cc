@@ -77,7 +77,7 @@ uint32_t ShdrBuilder::GetIndex(ShdrType type) const {
 
 void ShdrBuilder::Freeze() {
     for (auto& s : shdrs) {
-        if (s.sh_name == GetShName(GnuHash) || s.sh_name == GetShName(GnuVersion)) {
+        if (s.sh_name == GetShName(GnuHash) || s.sh_name == GetShName(RelaDyn) || s.sh_name == GetShName(GnuVersion)) {
             s.sh_link = GetIndex(Dynsym);
         } else if (s.sh_name == GetShName(Dynsym) || s.sh_name == GetShName(GnuVersionR) || s.sh_name == GetShName(Dynamic)) {
             s.sh_link = GetIndex(Dynstr);
@@ -124,11 +124,11 @@ void ShdrBuilder::RegisterShdr(Elf_Off offset, uint64_t size, ShdrType type, uin
             shdr.sh_type = SHT_RELA;
             shdr.sh_flags = SHF_ALLOC;
             break;
-        case Init:
+        case InitArray:
             shdr.sh_type = SHT_INIT_ARRAY;
             shdr.sh_flags = SHF_ALLOC | SHF_EXECINSTR;
             break;
-        case Fini:
+        case FiniArray:
             shdr.sh_type = SHT_FINI_ARRAY;
             shdr.sh_flags = SHF_ALLOC | SHF_EXECINSTR;
             break;
