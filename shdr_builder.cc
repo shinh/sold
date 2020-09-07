@@ -77,7 +77,7 @@ uint32_t ShdrBuilder::GetIndex(ShdrType type) const {
 
 void ShdrBuilder::Freeze() {
     for (auto& s : shdrs) {
-        if (s.sh_name == GetShName(GnuHash) || s.sh_name == GetShName(GnuVersion)) {
+        if (s.sh_name == GetShName(GnuHash) || s.sh_name == GetShName(RelaDyn) || s.sh_name == GetShName(GnuVersion)) {
             s.sh_link = GetIndex(Dynsym);
         } else if (s.sh_name == GetShName(Dynsym) || s.sh_name == GetShName(GnuVersionR) || s.sh_name == GetShName(Dynamic)) {
             s.sh_link = GetIndex(Dynstr);
