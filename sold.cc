@@ -290,7 +290,7 @@ private:
         if (!main_binary_->rpath().empty()) {
             MakeDyn(DT_RPATH, AddStr(main_binary_->rpath()));
         }
-        if (main_binary_->runpath().empty()) {
+        if (!main_binary_->runpath().empty()) {
             MakeDyn(DT_RUNPATH, AddStr(main_binary_->runpath()));
         }
 
