@@ -23,9 +23,9 @@ uint32_t CalcHash(const std::string& name);
 struct Elf_Hash {
     uint32_t nbuckets{0};
     uint32_t nchains{0};
-    uint8_t tail[0];
+    uint8_t tail[1];
 
     const uint32_t* buckets() const { return reinterpret_cast<const uint32_t*>(tail); }
 
-    const uint32_t* chains() const { return buckets() + nchains; }
+    const uint32_t* chains() const { return buckets() + nbuckets; }
 };
