@@ -88,12 +88,19 @@ std::set<int> CollectSymbolsFromGnuHash(Elf_GnuHash* gnu_hash) {
     return indices;
 }
 
-std::set<int> CollectSymbolsFromElfHash(Elf_Hash* hash) {
+std::set<int> CollectSymbolsFromElfHash(const std::string& name, Elf_Hash* hash) {
     std::set<int> indices;
     const uint32_t* buckets = hash->buckets();
+    const uint32_t* chains = hash->chains();
     for (size_t i = 0; i < hash->nbuckets; ++i) {
-        int n = buckets[i];
-        indices.insert(n);
+        for (int n = buckets[i]; n != STN_UNDEF; n = chains[n]) {
+            if (n >= hash->nchains) {
+                // TODO(hamaji): Investigate why libnvrtc.so.10.2 has this chain.
+                LOGF("ELF hash overflow in %s: i=%d n=%d\n", name.c_str(), i, n);
+                break;
+            }
+            indices.insert(n);
+        }
     }
     return indices;
 }
@@ -113,7 +120,7 @@ void ELFBinary::ReadDynSymtab() {
         indices = CollectSymbolsFromGnuHash(gnu_hash_);
     } else {
         CHECK(hash_);
-        indices = CollectSymbolsFromElfHash(hash_);
+        indices = CollectSymbolsFromElfHash(name(), hash_);
     }
 
     for (int idx : CollectSymbolsFromReloc(rel_, num_rels_)) indices.insert(idx);
