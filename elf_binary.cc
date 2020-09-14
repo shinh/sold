@@ -94,11 +94,6 @@ std::set<int> CollectSymbolsFromElfHash(const std::string& name, Elf_Hash* hash)
     const uint32_t* chains = hash->chains();
     for (size_t i = 0; i < hash->nbuckets; ++i) {
         for (int n = buckets[i]; n != STN_UNDEF; n = chains[n]) {
-            if (n >= hash->nchains) {
-                // TODO(hamaji): Investigate why libnvrtc.so.10.2 has this chain.
-                LOGF("ELF hash overflow in %s: i=%d n=%d\n", name.c_str(), i, n);
-                break;
-            }
             indices.insert(n);
         }
     }
