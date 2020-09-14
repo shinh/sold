@@ -27,6 +27,15 @@ SymtabBuilder::SymtabBuilder() {
     CHECK(syms_.emplace(std::make_tuple("", "", ""), sym).second);
 }
 
+void SymtabBuilder::SetSrcSyms(std::vector<Syminfo> syms) {
+    for (const auto& s : syms) {
+        auto p = src_syms_.find({s.name, s.soname, s.version});
+        if (p == src_syms_.end() || p->second.second == NULL || !IsDefined(*p->second.second)) {
+            src_syms_[{s.name, s.soname, s.version}] = {s.versym, s.sym};
+        }
+    }
+}
+
 uintptr_t SymtabBuilder::AddSym(const Syminfo& sym) {
     uintptr_t index = exposed_syms_.size();
     exposed_syms_.push_back(sym);
@@ -46,20 +55,15 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
     if (found != syms_.end()) {
         sym = found->second;
     } else {
-        Syminfo* found = NULL;
-        for (int i = 0; i < src_syms_.size(); i++) {
-            if (src_syms_[i].name == name && src_syms_[i].soname == soname && src_syms_[i].version == version) {
-                if (found == NULL || IsDefined(*src_syms_[i].sym)) found = &src_syms_[i];
-            }
-        }
+        auto found = src_syms_.find({name, soname, version});
 
-        if (found != NULL) {
-            sym.sym = *found->sym;
+        if (found != src_syms_.end()) {
+            sym.sym = *found->second.second;
             if (IsDefined(sym.sym)) {
                 LOGF("Symbol %s found\n", name.c_str());
             } else {
                 LOGF("Symbol (undef/weak) %s found\n", name.c_str());
-                Syminfo s{name, soname, version, newver(found->versym), NULL};
+                Syminfo s{name, soname, version, newver(found->second.first), NULL};
                 sym.index = AddSym(s);
                 CHECK(syms_.emplace(std::make_tuple(name, soname, version), sym).second);
             }
@@ -94,17 +98,12 @@ uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string&
     if (found != syms_.end()) {
         sym = found->second;
     } else {
-        Syminfo* found = NULL;
-        for (int i = 0; i < src_syms_.size(); i++) {
-            if (src_syms_[i].name == name && src_syms_[i].soname == soname && src_syms_[i].version == version) {
-                found = &src_syms_[i];
-            }
-        }
+        auto found = src_syms_.find({name, soname, version});
 
-        if (found != NULL) {
+        if (found != src_syms_.end()) {
             LOGF("Symbol %s found for copy\n", name.c_str());
-            sym.sym = *found->sym;
-            Syminfo s{name, soname, version, newver(found->versym), NULL};
+            sym.sym = *found->second.second;
+            Syminfo s{name, soname, version, newver(found->second.first), NULL};
             sym.index = AddSym(s);
             CHECK(syms_.emplace(std::make_tuple(name, soname, version), sym).second);
         } else {
