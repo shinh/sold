@@ -51,7 +51,7 @@ public:
         CollectTLS();
         CollectArrays();
         CollectSymbols();
-        PrintAllVerneeds();
+        PrintAllVersion();
         PrintAllVersyms();
         CopyPublicSymbols();
         Relocate();
@@ -552,11 +552,11 @@ private:
         syms_.SetSrcSyms(syms);
     }
 
-    void PrintAllVerneeds() {
-        LOGF("PrintAllVerneeds\n");
+    void PrintAllVersion() {
+        LOGF("PrintAllVersion\n");
         for (ELFBinary* bin : link_binaries_) {
             LOGF("==== %s ====\n", bin->filename().c_str());
-            bin->PrintVerneeds();
+            std::cout << bin->ShowVersion() << std::endl;
         }
     }
 
@@ -664,7 +664,7 @@ private:
 
     void RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
         const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
-        auto [filename, version_name] = bin->GetVerneed(ELF_R_SYM(rel->r_info));
+        auto [filename, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info));
 
         int type = ELF_R_TYPE(rel->r_info);
         const uintptr_t addend = rel->r_addend;
