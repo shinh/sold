@@ -13,7 +13,7 @@ class SymtabBuilder {
 public:
     SymtabBuilder();
 
-    void SetSrcSyms(std::vector<Syminfo> syms) { src_syms_ = syms; }
+    void SetSrcSyms(std::vector<Syminfo> syms);
 
     bool Resolve(const std::string& name, const std::string& filename, const std::string version_name, uintptr_t& val_or_index);
 
@@ -41,7 +41,8 @@ private:
         uintptr_t index;
     };
 
-    std::vector<Syminfo> src_syms_;
+    // map from (name, soname, version) to Versym and Sym
+    std::map<std::tuple<std::string, std::string, std::string>, std::pair<Elf_Versym, Elf_Sym*> > src_syms_;
     std::map<std::tuple<std::string, std::string, std::string>, Symbol> syms_;
 
     std::vector<Syminfo> exposed_syms_;
