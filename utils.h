@@ -3,9 +3,16 @@
 #include <elf.h>
 
 #include <cassert>
+#include <iomanip>
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
+
+#include <glog/logging.h>
+
+#define SOLD_LOG_KEY_VALUE(key, value) " " << key << "=" << value
+#define SOLD_LOG_KEY(key) SOLD_LOG_KEY_VALUE(#key, key)
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
@@ -29,30 +36,6 @@
 #define ELF_R_SYM(val) ELF64_R_SYM(val)
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
-
-#define CHECK(r)             \
-    do {                     \
-        if (!(r)) assert(r); \
-    } while (0)
-
-const bool FLAGS_LOG{false};
-extern bool QUIET_LOG;
-
-#ifdef NOLOG
-#define LOGF(...)                                               \
-    do {                                                        \
-        if (QUIET_LOG) break;                                   \
-        if (0) fprintf(stderr, "%s, %d: ", __FILE__, __LINE__); \
-        fprintf(stderr, __VA_ARGS__);                           \
-    } while(0)
-#else
-#define LOGF(...)                                                       \
-    do {                                                                \
-        if (QUIET_LOG) break;                                           \
-        if (FLAGS_LOG) fprintf(stderr, "%s, %d: ", __FILE__, __LINE__); \
-        fprintf(stderr, __VA_ARGS__);                                   \
-    } while(0)
-#endif
 
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep);
 
@@ -100,3 +83,10 @@ struct TLS {
 bool is_special_ver_ndx(Elf64_Versym v);
 
 std::string special_ver_ndx_to_str(Elf64_Versym v);
+
+template <class T>
+std::string HexString(T num, int length = 16) {
+    std::stringstream ss;
+    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << num;
+    return ss.str();
+}

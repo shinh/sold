@@ -38,8 +38,6 @@ uint32_t ShdrBuilder::GetShName(ShdrType type) const {
 }
 
 void ShdrBuilder::EmitShdrs(FILE* fp) {
-    LOGF("EmitShdrs\n");
-
     Elf_Shdr shstrtab;
     bool found_shstrtab = false;
     int num_not_shstrtab = 0;
@@ -71,7 +69,7 @@ uint32_t ShdrBuilder::GetIndex(ShdrType type) const {
         r++;
     }
 
-    LOGF("It is not in shdrs.\n");
+    LOG(FATAL) << "It is not in shdrs.";
     exit(1);
 }
 
@@ -147,7 +145,7 @@ void ShdrBuilder::RegisterShdr(Elf_Off offset, uint64_t size, ShdrType type, uin
             shdr.sh_flags = SHF_ALLOC | SHF_WRITE;
             break;
         default:
-            LOGF("Not implemented\n");
+            LOG(FATAL) << "Not implemented";
             exit(1);
     }
     shdrs.push_back(shdr);

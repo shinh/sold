@@ -1,7 +1,5 @@
 #include "utils.h"
 
-bool QUIET_LOG{false};
-
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep) {
     std::vector<std::string> ret;
     if (str.empty()) return ret;
@@ -42,7 +40,7 @@ std::string special_ver_ndx_to_str(Elf64_Versym versym) {
     } else if (versym == VER_NDX_GLOBAL) {
         return std::string("VER_NDX_GLOBAL");
     } else {
-        LOGF("This versym (= %d) is not special.\n", versym);
+        LOG(FATAL) << "This versym (= " << versym << ") is not special.";
         exit(1);
     }
 }
