@@ -196,7 +196,7 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
                 Elf_Verdaux* vda = (Elf_Verdaux*)((char*)vd + vd->vd_aux);
                 for (int j = 0; j < vd->vd_cnt; ++j) {
                     if (vd->vd_flags & VER_FLG_BASE) {
-                        soname = std::string(strtab_ + vda->vda_name);
+                        soname = name();
                     }
                     if (vd->vd_ndx == versym_[index]) {
                         version = std::string(strtab_ + vda->vda_name);
@@ -354,7 +354,7 @@ void ELFBinary::ParseDynamic(size_t off, size_t size) {
             const char* needed = strtab_ + dyn->d_un.d_val;
             neededs_.push_back(needed);
         } else if (dyn->d_tag == DT_SONAME) {
-            name_ = soname_ = strtab_ + dyn->d_un.d_val;
+            soname_ = strtab_ + dyn->d_un.d_val;
         } else if (dyn->d_tag == DT_RUNPATH) {
             runpath_ = strtab_ + dyn->d_un.d_val;
         } else if (dyn->d_tag == DT_RPATH) {

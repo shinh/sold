@@ -278,7 +278,7 @@ private:
         for (const auto& p : libraries_) {
             ELFBinary* bin = p.second.get();
             if (!linked.count(bin)) {
-                neededs.insert(bin->soname());
+                neededs.insert(bin->name());
             }
         }
 
