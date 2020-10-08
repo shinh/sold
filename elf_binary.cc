@@ -156,7 +156,7 @@ const Elf_Phdr& ELFBinary::GetPhdr(uint64_t type) {
     return *phdr;
 }
 
-// GetVerneed returns (soname, version)
+// GetVerneed returns (filename, version)
 std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
     LOG(INFO) << "GetVerneed";
     if (!versym_) {
@@ -191,12 +191,12 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
         }
         if (verdef_) {
             Elf_Verdef* vd = verdef_;
-            std::string soname, version;
+            std::string filename, version;
             for (int i = 0; i < verdefnum_; ++i) {
                 Elf_Verdaux* vda = (Elf_Verdaux*)((char*)vd + vd->vd_aux);
                 for (int j = 0; j < vd->vd_cnt; ++j) {
                     if (vd->vd_flags & VER_FLG_BASE) {
-                        soname = name();
+                        filename = name();
                     }
                     if (vd->vd_ndx == versym_[index]) {
                         version = std::string(strtab_ + vda->vda_name);
@@ -205,9 +205,9 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
                 }
                 vd = (Elf_Verdef*)((char*)vd + vd->vd_next);
             }
-            if (soname != "" && version != "") {
-                LOG(INFO) << "Find Elf_Verdef corresponds to " << versym_[index] << SOLD_LOG_KEY(soname) << SOLD_LOG_KEY(version);
-                return std::make_pair(soname, version);
+            if (filename != "" && version != "") {
+                LOG(INFO) << "Find Elf_Verdef corresponds to " << versym_[index] << SOLD_LOG_KEY(filename) << SOLD_LOG_KEY(version);
+                return std::make_pair(filename, version);
             }
         }
 
