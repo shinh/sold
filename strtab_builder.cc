@@ -18,7 +18,7 @@ uintptr_t StrtabBuilder::GetPos(const std::string& s) {
     if (cache.find(s) != cache.end()) {
         return cache[s];
     } else {
-        LOGF("%s is not in StrtabBuilder.\n", s.c_str());
-        CHECK(false);
+        LOG(FATAL) << s << " is not in StrtabBuilder.";
+        exit(1);
     }
 }

@@ -51,8 +51,6 @@ public:
         CollectTLS();
         CollectArrays();
         CollectSymbols();
-        PrintAllVersion();
-        PrintAllVersyms();
         CopyPublicSymbols();
         Relocate();
 
@@ -252,7 +250,7 @@ private:
 
     void BuildInterp() {
         const std::string interp = main_binary_->head() + main_binary_->GetPhdr(PT_INTERP).p_offset;
-        LOGF("Interp: %s\n", interp.c_str());
+        LOG(INFO) << "Interp: " << interp;
         interp_offset_ = AddStr(interp);
     }
 
@@ -467,7 +465,8 @@ private:
         for (const Load& load : loads_) {
             ELFBinary* bin = load.bin;
             Elf_Phdr* phdr = load.orig;
-            LOGF("Emitting code of %s from %lx => %lx +%lx\n", bin->name().c_str(), ftell(fp), load.emit.p_offset, phdr->p_filesz);
+            LOG(INFO) << "Emitting code of " << bin->name() << " from " << HexString(ftell(fp)) << " => " << HexString(load.emit.p_offset)
+                      << " + " << HexString(phdr->p_filesz);
             EmitPad(fp, load.emit.p_offset);
             WriteBuf(fp, bin->head() + phdr->p_offset, phdr->p_filesz);
         }
@@ -492,7 +491,7 @@ private:
             const Range range = bin->GetRange() + offset;
             CHECK(range.start == offset);
             offsets_.emplace(bin, range.start);
-            LOGF("Assigned: %s %08lx-%08lx\n", bin->soname().c_str(), range.start, range.end);
+            LOG(INFO) << "Assigned: " << bin->soname() << " " << HexString(range.start, 8) << "-" << HexString(range.end, 8);
             offset = range.end;
         }
         tls_offset_ = offset;
@@ -517,10 +516,12 @@ private:
 
         for (TLS::Data& d : tls_.data) {
             d.bss_offset += tls_.filesz;
-            LOGF("TLS of %s: file=%lx +%lx mem=%lx\n", d.bin->name().c_str(), d.file_offset, d.size, d.bss_offset);
+            LOG(INFO) << "TLS of " << d.bin->name() << ": file=" << HexString(d.file_offset) << " + " << HexString(d.size)
+                      << " mem=" << HexString(d.bss_offset);
         }
 
-        LOGF("TLS: filesz=%lx memsz=%lx cnt=%zu\n", tls_.filesz, tls_.memsz, tls_.data.size());
+        LOG(INFO) << "TLS: filesz=" << HexString(tls_.filesz) << " memsz=" << HexString(tls_.memsz)
+                  << " cnt=" << HexString(tls_.data.size());
     }
 
     void CollectArrays() {
@@ -537,33 +538,34 @@ private:
                 fini_array_.push_back(ptr + offset);
             }
         }
-        LOGF("Array numbers: init_array=%zu fini_array=%zu\n", init_array_.size(), fini_array_.size());
+        LOG(INFO) << "Array numbers: init_array=" << init_array_.size() << " fini_array=" << fini_array_.size();
     }
 
     void CollectSymbols() {
+        LOG(INFO) << "CollectSymbols";
+
         std::vector<Syminfo> syms;
         for (ELFBinary* bin : link_binaries_) {
             LoadDynSymtab(bin, syms);
         }
-        LOGF("CollectSymbols\n");
         for (auto s : syms) {
-            LOGF("SYM %s\n", s.name.c_str());
+            LOG(INFO) << "SYM " << s.name;
         }
         syms_.SetSrcSyms(syms);
     }
 
     void PrintAllVersion() {
-        LOGF("PrintAllVersion\n");
+        LOG(INFO) << "PrintAllVersion";
+
         for (ELFBinary* bin : link_binaries_) {
-            LOGF("==== %s ====\n", bin->filename().c_str());
             std::cout << bin->ShowVersion() << std::endl;
         }
     }
 
     void PrintAllVersyms() {
-        LOGF("PrintAllVersyms\n");
+        LOG(INFO) << "PrintAllVersyms";
+
         for (ELFBinary* bin : link_binaries_) {
-            LOGF("==== %s ====\n", bin->filename().c_str());
             bin->PrintVersyms();
         }
     }
@@ -576,10 +578,12 @@ private:
         CHECK(found != tls_.bin_to_index.end());
         const TLS::Data& entry = tls_.data[found->second];
         if (off < tls->p_filesz) {
-            LOGF("TLS data %s in %s remapped %lx => %lx\n", msg, bin->name().c_str(), off, off + entry.file_offset);
+            LOG(INFO) << "TLS data " << msg << " in " << bin->name() << " remapped " << HexString(off) << " => "
+                      << HexString(off + entry.file_offset);
             off += entry.file_offset;
         } else {
-            LOGF("TLS bss %s in %s remapped %lx => %lx\n", msg, bin->name().c_str(), off, off + entry.bss_offset);
+            LOG(INFO) << "TLS bss " << msg << " in " << bin->name() << " remapped " << HexString(off) << " => "
+                      << HexString(off + entry.bss_offset);
             off += entry.bss_offset;
         }
         return off;
@@ -598,7 +602,7 @@ private:
             } else if (sym->st_value) {
                 sym->st_value += offset;
             }
-            LOGF("Symbol %s@%s %08lx\n", name.c_str(), bin->name().c_str(), sym->st_value);
+            LOG(INFO) << "Symbol " << name << "@" << bin->name() << " " << sym->st_value;
 
             Syminfo* found = NULL;
             for (int i = 0; i < symtab.size(); i++) {
@@ -625,7 +629,7 @@ private:
         for (const auto& p : main_binary_->GetSymbolMap()) {
             const Elf_Sym* sym = p.sym;
             if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
-                LOGF("Copy public symbol %s\n", p.name.c_str());
+                LOG(INFO) << "Copy public symbol " << p.name;
                 syms_.AddPublicSymbol(p);
             }
         }
@@ -634,7 +638,7 @@ private:
             for (const auto& p : bin->GetSymbolMap()) {
                 const Elf_Sym* sym = p.sym;
                 if (IsTLS(*sym)) {
-                    LOGF("Copy TLS symbol %s\n", p.name.c_str());
+                    LOG(INFO) << "Copy TLS symbol " << p.name;
                     syms_.AddPublicSymbol(p);
                 }
             }
@@ -679,7 +683,7 @@ private:
             newrel.r_offset += offset;
         }
 
-        LOGF("Relocate %s at %lx\n", bin->Str(sym->st_name), rel->r_offset);
+        LOG(INFO) << "Relocate " << bin->Str(sym->st_name) << " at " << rel->r_offset;
 
         switch (type) {
             case R_X86_64_RELATIVE: {
@@ -720,7 +724,7 @@ private:
             }
 
             default:
-                LOGF("Unknown relocation type: %d\n", type);
+                LOG(FATAL) << "Unknown relocation type: " << type;
                 CHECK(false);
         }
 
@@ -751,7 +755,7 @@ private:
         replace(out, "$ORIGIN", origin);
         replace(out, "${ORIGIN}", origin);
         if (out.find('$') != std::string::npos) {
-            LOGF("Unsupported runpath: %s\n", runpath.c_str());
+            LOG(INFO) << "Unsupported runpath: " << runpath;
             abort();
         }
         return out;
@@ -802,14 +806,14 @@ private:
                 }
             }
             if (!library) {
-                LOGF("Library %s not found\n", needed.c_str());
+                LOG(FATAL) << "Library " << needed << " not found";
                 abort();
             }
             if (ShouldLink(library->soname())) {
                 link_binaries_.push_back(library.get());
             }
 
-            LOGF("Loaded: %s => %s\n", needed.c_str(), library->filename().c_str());
+            LOG(INFO) << "Loaded: " << needed << " => " << library->filename();
 
             auto inserted = libraries_.emplace(needed, std::move(library));
             CHECK(inserted.second);
@@ -883,20 +887,20 @@ Options:
 -i, --input-file INPUT_FILE     Specify the ELF file to output
 -e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
 --section-headers               Emit section headers
--q, --quiet                     Suppress log outout
 
 The last argument is interpreted as SOURCE_FILE when -i option isn't given.
 )" << std::endl;
 }
 
 int main(int argc, char* const argv[]) {
+    google::InitGoogleLogging(argv[0]);
+
     static option long_options[] = {
         {"help", no_argument, nullptr, 'h'},
         {"input-file", required_argument, nullptr, 'i'},
         {"output-file", required_argument, nullptr, 'o'},
         {"exclude-so", required_argument, nullptr, 'e'},
         {"section-headers", no_argument, nullptr, 1},
-        {"quiet", no_argument, nullptr, 'q'},
         {0, 0, 0, 0},
     };
 
@@ -906,7 +910,7 @@ int main(int argc, char* const argv[]) {
     bool emit_section_header = false;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "hi:o:e:q", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hi:o:e:", long_options, nullptr)) != -1) {
         switch (opt) {
             case 1:
                 emit_section_header = true;
@@ -923,9 +927,6 @@ int main(int argc, char* const argv[]) {
             case 'h':
                 print_help(std::cout);
                 return 0;
-            case 'q':
-                QUIET_LOG = true;
-                break;
             case '?':
                 print_help(std::cerr);
                 return 1;
