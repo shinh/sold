@@ -61,7 +61,7 @@ target_link_libraries(print_version sold_lib glog)
 
 add_subdirectory(tests)
 
-configure_file(${CMAKE_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_BINARY_DIR})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_CURRENT_BINARY_DIR})
 include(CTest)
 
 if(BUILD_TESTING)
