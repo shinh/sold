@@ -156,9 +156,9 @@ const Elf_Phdr& ELFBinary::GetPhdr(uint64_t type) {
     return *phdr;
 }
 
-// GetVerneed returns (soname, version)
+// GetVersion returns (soname, version)
 std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
-    LOG(INFO) << "GetVerneed";
+    LOG(INFO) << "GetVersion";
     if (!versym_) {
         return std::make_pair("", "");
     }
@@ -354,7 +354,7 @@ void ELFBinary::ParseDynamic(size_t off, size_t size) {
             const char* needed = strtab_ + dyn->d_un.d_val;
             neededs_.push_back(needed);
         } else if (dyn->d_tag == DT_SONAME) {
-            name_ = soname_ = strtab_ + dyn->d_un.d_val;
+            soname_ = strtab_ + dyn->d_un.d_val;
         } else if (dyn->d_tag == DT_RUNPATH) {
             runpath_ = strtab_ + dyn->d_un.d_val;
         } else if (dyn->d_tag == DT_RPATH) {
