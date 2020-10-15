@@ -156,9 +156,9 @@ const Elf_Phdr& ELFBinary::GetPhdr(uint64_t type) {
     return *phdr;
 }
 
-// GetVerneed returns (soname, version)
+// GetVersion returns (soname, version)
 std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
-    LOG(INFO) << "GetVerneed";
+    LOG(INFO) << "GetVersion";
     if (!versym_) {
         return std::make_pair("", "");
     }
