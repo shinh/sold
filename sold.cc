@@ -44,6 +44,7 @@ public:
 
         InitLdLibraryPaths();
         ResolveLibraryPaths(main_binary_.get());
+        ConstructFilenameToSoname();
     }
 
     void Link(const std::string& out_filename) {
@@ -590,7 +591,7 @@ private:
     }
 
     void LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
-        bin->ReadDynSymtab();
+        bin->ReadDynSymtab(filename_to_soname_);
 
         uintptr_t offset = offsets_[bin];
 
@@ -668,7 +669,7 @@ private:
 
     void RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
         const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
-        auto [filename, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info));
+        auto [filename, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info), filename_to_soname_);
 
         int type = ELF_R_TYPE(rel->r_info);
         const uintptr_t addend = rel->r_addend;
@@ -821,6 +822,17 @@ private:
         }
     }
 
+    void ConstructFilenameToSoname() {
+        for (const auto& l : link_binaries_) {
+            if (l->name() != "" && l->soname() != "") {
+                filename_to_soname_[l->name()] = l->soname();
+                LOG(INFO) << SOLD_LOG_KEY(l->name()) << SOLD_LOG_KEY(l->soname());
+            } else {
+                LOG(WARNING) << "Empty filename or soname: " << SOLD_LOG_KEY(l->name()) << SOLD_LOG_KEY(l->soname());
+            }
+        }
+    }
+
     bool Exists(const std::string& filename) {
         struct stat st;
         if (stat(filename.c_str(), &st) != 0) {
@@ -860,6 +872,7 @@ private:
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
+    std::map<std::string, std::string> filename_to_soname_;
     uintptr_t tls_file_offset_{0};
     uintptr_t tls_offset_{0};
     bool is_executable_{false};

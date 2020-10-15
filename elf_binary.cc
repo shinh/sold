@@ -103,7 +103,7 @@ std::set<int> CollectSymbolsFromElfHash(const std::string& name, Elf_Hash* hash)
 
 }  // namespace
 
-void ELFBinary::ReadDynSymtab() {
+void ELFBinary::ReadDynSymtab(const std::map<std::string, std::string>& filename_to_soname) {
     CHECK(symtab_);
     LOG(INFO) << "Read dynsymtab of " << name();
 
@@ -132,7 +132,7 @@ void ELFBinary::ReadDynSymtab() {
         LOG(INFO) << symname << "@" << name() << " index in .dynsym = " << idx;
 
         // Get version information coresspoinds to idx
-        auto p = GetVersion(idx);
+        auto p = GetVersion(idx, filename_to_soname);
         Elf_Versym v = (versym_) ? versym_[idx] : -1;
 
         syms_.push_back(Syminfo{symname, p.first, p.second, v, sym});
@@ -157,7 +157,7 @@ const Elf_Phdr& ELFBinary::GetPhdr(uint64_t type) {
 }
 
 // GetVersion returns (soname, version)
-std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
+std::pair<std::string, std::string> ELFBinary::GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname) {
     LOG(INFO) << "GetVersion";
     if (!versym_) {
         return std::make_pair("", "");
@@ -181,7 +181,13 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index) {
                     if (vna->vna_other == versym_[index]) {
                         LOG(INFO) << "Find Elf_Vernaux corresponds to " << versym_[index] << SOLD_LOG_KEY(strtab_ + vn->vn_file)
                                   << SOLD_LOG_KEY(strtab_ + vna->vna_name);
-                        return std::make_pair(std::string(strtab_ + vn->vn_file), std::string(strtab_ + vna->vna_name));
+
+                        std::string filename = std::string(strtab_ + vn->vn_file);
+                        if (filename_to_soname.find(filename) != filename_to_soname.end()) {
+                            return std::make_pair(filename_to_soname.find(filename)->second, std::string(strtab_ + vna->vna_name));
+                        } else {
+                            LOG(WARNING) << "There is no entry for " << filename << " in filename_to_soname. ";
+                        }
                     }
 
                     vna = (Elf_Vernaux*)((char*)vna + vna->vna_next);
