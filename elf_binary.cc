@@ -183,8 +183,9 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index, const std::
                                   << SOLD_LOG_KEY(strtab_ + vna->vna_name);
 
                         std::string filename = std::string(strtab_ + vn->vn_file);
-                        if (filename_to_soname.find(filename) != filename_to_soname.end()) {
-                            return std::make_pair(filename_to_soname.find(filename)->second, std::string(strtab_ + vna->vna_name));
+                        auto found = filename_to_soname.find(filename);
+                        if (found != filename_to_soname.end()) {
+                            return std::make_pair(found->second, std::string(strtab_ + vna->vna_name));
                         } else {
                             LOG(WARNING) << "There is no entry for " << filename << " in filename_to_soname. Use filename as soname. ";
                             return std::make_pair(filename, std::string(strtab_ + vna->vna_name));
