@@ -42,6 +42,15 @@ public:
         is_executable_ = main_binary_->FindPhdr(PT_INTERP);
         link_binaries_.push_back(main_binary_.get());
 
+        // Register (filename, soname) of main_binary_
+        if (main_binary_->name() != "" && main_binary_->soname() != "") {
+            filename_to_soname_[main_binary_->name()] = main_binary_->soname();
+            LOG(INFO) << SOLD_LOG_KEY(main_binary_->name()) << SOLD_LOG_KEY(main_binary_->soname());
+        } else {
+            // soname of main_binary_ can be empty when main_binary_ is executable file.
+            LOG(WARNING) << "Empty filename or soname: " << SOLD_LOG_KEY(main_binary_->name()) << SOLD_LOG_KEY(main_binary_->soname());
+        }
+
         InitLdLibraryPaths();
         ResolveLibraryPaths(main_binary_.get());
     }
@@ -590,7 +599,7 @@ private:
     }
 
     void LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
-        bin->ReadDynSymtab();
+        bin->ReadDynSymtab(filename_to_soname_);
 
         uintptr_t offset = offsets_[bin];
 
@@ -668,7 +677,7 @@ private:
 
     void RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
         const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
-        auto [filename, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info));
+        auto [soname, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info), filename_to_soname_);
 
         int type = ELF_R_TYPE(rel->r_info);
         const uintptr_t addend = rel->r_addend;
@@ -694,7 +703,7 @@ private:
             case R_X86_64_GLOB_DAT:
             case R_X86_64_JUMP_SLOT: {
                 uintptr_t val_or_index;
-                if (syms_.Resolve(bin->Str(sym->st_name), filename, version_name, val_or_index)) {
+                if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
                     newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                     newrel.r_addend = val_or_index;
                 } else {
@@ -705,7 +714,7 @@ private:
 
             case R_X86_64_64: {
                 uintptr_t val_or_index;
-                if (syms_.Resolve(bin->Str(sym->st_name), filename, version_name, val_or_index)) {
+                if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
                     newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
                     newrel.r_addend += val_or_index;
                 } else {
@@ -718,7 +727,7 @@ private:
             case R_X86_64_DTPOFF64:
             case R_X86_64_COPY: {
                 const std::string name = bin->Str(sym->st_name);
-                uintptr_t index = syms_.ResolveCopy(name, filename, version_name);
+                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
                 newrel.r_info = ELF_R_INFO(index, type);
                 break;
             }
@@ -809,6 +818,16 @@ private:
                 LOG(FATAL) << "Library " << needed << " not found";
                 abort();
             }
+
+            // Register (filename, soname)
+            if (library->name() != "" && library->soname() != "") {
+                filename_to_soname_[library->name()] = library->soname();
+                LOG(INFO) << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+            } else {
+                // soname of shared objects must be non-empty.
+                LOG(FATAL) << "Empty filename or soname: " << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+            }
+
             if (ShouldLink(library->soname())) {
                 link_binaries_.push_back(library.get());
             }
@@ -860,6 +879,7 @@ private:
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
+    std::map<std::string, std::string> filename_to_soname_;
     uintptr_t tls_file_offset_{0};
     uintptr_t tls_offset_{0};
     bool is_executable_{false};

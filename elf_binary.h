@@ -49,7 +49,7 @@ public:
 
     bool InTLS(uintptr_t offset) const;
 
-    void ReadDynSymtab();
+    void ReadDynSymtab(const std::map<std::string, std::string>& filename_to_soname);
 
     const char* Str(uintptr_t name) { return strtab_ + name; }
 
@@ -71,7 +71,7 @@ public:
 
     std::string ShowTLS();
 
-    std::pair<std::string, std::string> GetVersion(int index);
+    std::pair<std::string, std::string> GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname);
 
 private:
     void ParsePhdrs();
