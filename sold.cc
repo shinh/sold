@@ -42,9 +42,17 @@ public:
         is_executable_ = main_binary_->FindPhdr(PT_INTERP);
         link_binaries_.push_back(main_binary_.get());
 
+        // Register (filename, soname) of main_binary_
+        if (main_binary_->name() != "" && main_binary_->soname() != "") {
+            filename_to_soname_[main_binary_->name()] = main_binary_->soname();
+            LOG(INFO) << SOLD_LOG_KEY(main_binary_->name()) << SOLD_LOG_KEY(main_binary_->soname());
+        } else {
+            // soname of main_binary_ can be empty when main_binary_ is executable file.
+            LOG(WARNING) << "Empty filename or soname: " << SOLD_LOG_KEY(main_binary_->name()) << SOLD_LOG_KEY(main_binary_->soname());
+        }
+
         InitLdLibraryPaths();
         ResolveLibraryPaths(main_binary_.get());
-        ConstructFilenameToSoname();
     }
 
     void Link(const std::string& out_filename) {
@@ -810,6 +818,16 @@ private:
                 LOG(FATAL) << "Library " << needed << " not found";
                 abort();
             }
+
+            // Register (filename, soname)
+            if (library->name() != "" && library->soname() != "") {
+                filename_to_soname_[library->name()] = library->soname();
+                LOG(INFO) << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+            } else {
+                // soname of shared objects must be non-empty.
+                LOG(FATAL) << "Empty filename or soname: " << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+            }
+
             if (ShouldLink(library->soname())) {
                 link_binaries_.push_back(library.get());
             }
@@ -819,17 +837,6 @@ private:
             auto inserted = libraries_.emplace(needed, std::move(library));
             CHECK(inserted.second);
             ResolveLibraryPaths(inserted.first->second.get());
-        }
-    }
-
-    void ConstructFilenameToSoname() {
-        for (const auto& l : link_binaries_) {
-            if (l->name() != "" && l->soname() != "") {
-                filename_to_soname_[l->name()] = l->soname();
-                LOG(INFO) << SOLD_LOG_KEY(l->name()) << SOLD_LOG_KEY(l->soname());
-            } else {
-                LOG(WARNING) << "Empty filename or soname: " << SOLD_LOG_KEY(l->name()) << SOLD_LOG_KEY(l->soname());
-            }
         }
     }
 
