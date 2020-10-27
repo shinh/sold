@@ -11,8 +11,6 @@ ln -sf libmax.so.2 libmax.so
 gcc -Wl,--hash-style=gnu -o vertest2 vertest2.c libmax.so
 
 LD_LIBRARY_PATH=. ../../build/sold -e libmax.so -o vertest1.out vertest1 --section-headers 
-../../build/print_dynsymtab vertest1.out
 LD_LIBRARY_PATH=. ./vertest1.out
 LD_LIBRARY_PATH=. ../../build/sold -e libmax.so -o vertest2.out vertest2  --section-headers
-../../build/print_dynsymtab vertest2.out
 LD_LIBRARY_PATH=. ./vertest2.out

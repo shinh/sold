@@ -12,5 +12,3 @@ cp original/base.so sold_out/base.so
 
 LD_LIBRARY_PATH=original ../../build/sold original/lib.so -o sold_out/lib.so --section-headers --exclude-so base.so
 LD_LIBRARY_PATH=sold_out ./main
-# ../../build/print_dynsymtab lib.so.sold
-# ../../build/print_tls lib.so.sold
