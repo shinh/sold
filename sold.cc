@@ -21,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <queue>
 #include <set>
 #include <string>
 #include <vector>
@@ -797,46 +798,63 @@ private:
         return library_paths;
     }
 
-    void ResolveLibraryPaths(const ELFBinary* binary) {
-        std::vector<std::string> library_paths = GetLibraryPaths(binary);
+    void ResolveLibraryPaths(const ELFBinary* root_binary) {
+        // We should search for shared objects in BFS order.
+        std::queue<const ELFBinary*> bfs_queue;
+        std::set<std::string> pushed_sonames;
 
-        for (const std::string& needed : binary->neededs()) {
-            auto found = libraries_.find(needed);
-            if (found != libraries_.end()) {
-                continue;
-            }
+        bfs_queue.push(root_binary);
 
-            std::unique_ptr<ELFBinary> library;
-            for (const std::string& path : library_paths) {
-                const std::string& filename = path + '/' + needed;
-                if (Exists(filename)) {
-                    library = ReadELF(filename);
-                    if (library) break;
+        while (!bfs_queue.empty()) {
+            const ELFBinary* binary = bfs_queue.front();
+            bfs_queue.pop();
+
+            std::vector<std::string> library_paths = GetLibraryPaths(binary);
+
+            for (const std::string& needed : binary->neededs()) {
+                auto found = libraries_.find(needed);
+                if (found != libraries_.end()) {
+                    continue;
                 }
-            }
-            if (!library) {
-                LOG(FATAL) << "Library " << needed << " not found";
-                abort();
-            }
 
-            // Register (filename, soname)
-            if (library->name() != "" && library->soname() != "") {
-                filename_to_soname_[library->name()] = library->soname();
-                LOG(INFO) << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
-            } else {
-                // soname of shared objects must be non-empty.
-                LOG(FATAL) << "Empty filename or soname: " << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+                std::unique_ptr<ELFBinary> library;
+                for (const std::string& path : library_paths) {
+                    const std::string& filename = path + '/' + needed;
+                    if (Exists(filename)) {
+                        library = ReadELF(filename);
+                        if (library) break;
+                    }
+                }
+                if (!library) {
+                    LOG(FATAL) << "Library " << needed << " not found";
+                    abort();
+                }
+
+                if (pushed_sonames.find(library->soname()) != pushed_sonames.end()) {
+                    LOG(INFO) << SOLD_LOG_KEY(library->name())
+                              << " is not linked because we have already linked another shared object with the same soname.";
+                    continue;
+                }
+
+                // Register (filename, soname)
+                if (library->name() != "" && library->soname() != "") {
+                    filename_to_soname_[library->name()] = library->soname();
+                    LOG(INFO) << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+                } else {
+                    // soname of shared objects must be non-empty.
+                    LOG(FATAL) << "Empty filename or soname: " << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
+                }
+
+                if (ShouldLink(library->soname())) {
+                    link_binaries_.push_back(library.get());
+                }
+
+                LOG(INFO) << "Loaded: " << needed << " => " << library->filename();
+
+                auto inserted = libraries_.emplace(needed, std::move(library));
+                CHECK(inserted.second);
+                bfs_queue.push(inserted.first->second.get());
             }
-
-            if (ShouldLink(library->soname())) {
-                link_binaries_.push_back(library.get());
-            }
-
-            LOG(INFO) << "Loaded: " << needed << " => " << library->filename();
-
-            auto inserted = libraries_.emplace(needed, std::move(library));
-            CHECK(inserted.second);
-            ResolveLibraryPaths(inserted.first->second.get());
         }
     }
 
