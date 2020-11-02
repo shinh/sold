@@ -19,6 +19,7 @@ add_definitions(-DC10_USE_GLOG=1)
 
 add_library(
     sold_lib
+    sold.cc
     elf_binary.cc
     hash.cc
     ldsoconf.cc
@@ -31,7 +32,7 @@ add_library(
 
 add_executable(
     sold
-    sold.cc
+    sold_main.cc
     )
 target_link_libraries(sold sold_lib glog)
 
