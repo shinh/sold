@@ -495,6 +495,8 @@ private:
         shdr_.EmitShdrs(fp);
     }
 
+    // Decide locations for each linked shared objects
+    // TODO(akawashiro) Is the initial value of offset optimal?
     void DecideOffsets() {
         uintptr_t offset = 0x10000000;
         for (ELFBinary* bin : link_binaries_) {
@@ -534,6 +536,7 @@ private:
                   << " cnt=" << HexString(tls_.data.size());
     }
 
+    // Collect .init_array and .fini_array
     void CollectArrays() {
         for (auto iter = link_binaries_.rbegin(); iter != link_binaries_.rend(); ++iter) {
             ELFBinary* bin = *iter;
@@ -551,6 +554,8 @@ private:
         LOG(INFO) << "Array numbers: init_array=" << init_array_.size() << " fini_array=" << fini_array_.size();
     }
 
+    // Collect most concretely defined symbols from all link_binaries_ and set
+    // them as the src_syms_ of syms_.
     void CollectSymbols() {
         LOG(INFO) << "CollectSymbols";
 
@@ -599,6 +604,10 @@ private:
         return off;
     }
 
+    // Push symbols of bin to symtab.
+    // When the same symbol is already in symtab, LoadDynSymtab selects a more
+    // concretely defined one.
+    // TODO(akawashiro) Raise an error when two same symbols are defined.
     void LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
         bin->ReadDynSymtab(filename_to_soname_);
 
@@ -635,9 +644,13 @@ private:
         }
     }
 
+    // Push all global symbols of main_binary_ into public_syms_.
+    // Push all TLS symbols into public_syms_.
+    // TODO(akawashiro) Do some of public_syms_ overlap with src_syms_?
     void CopyPublicSymbols() {
         for (const auto& p : main_binary_->GetSymbolMap()) {
             const Elf_Sym* sym = p.sym;
+            // TODO(akawashiro) Do we need this IsDefined check?
             if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
                 LOG(INFO) << "Copy public symbol " << p.name;
                 syms_.AddPublicSymbol(p);
@@ -676,6 +689,9 @@ private:
         }
     }
 
+    // Make new relocation table.
+    // RelocateSymbol_x86_64 rewrites r_offset of each relocation entries
+    // because we decided locations of shared objects in DecideOffsets.
     void RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
         const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
         auto [soname, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info), filename_to_soname_);
@@ -696,11 +712,17 @@ private:
         LOG(INFO) << "Relocate " << bin->Str(sym->st_name) << " at " << rel->r_offset;
 
         switch (type) {
+            // TODO(akawashiro) Check sym is invalid.
+            // This relocation type doesn't need any symbol therefore sym
+            // should be invalid, isn't it?
             case R_X86_64_RELATIVE: {
                 newrel.r_addend += offset;
                 break;
             }
 
+            // Even if we found the defined symbol in src_syms_, we cannot
+            // erase this relocation entry. Because the address is fixed at
+            // runtime by ASLR feature.
             case R_X86_64_GLOB_DAT:
             case R_X86_64_JUMP_SLOT: {
                 uintptr_t val_or_index;
@@ -724,6 +746,7 @@ private:
                 break;
             }
 
+            // TODO(akawashiro) Fill here with some exaplanation.
             case R_X86_64_DTPMOD64:
             case R_X86_64_DTPOFF64:
             case R_X86_64_COPY: {

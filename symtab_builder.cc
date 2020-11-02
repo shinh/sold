@@ -30,6 +30,8 @@ SymtabBuilder::SymtabBuilder() {
 void SymtabBuilder::SetSrcSyms(std::vector<Syminfo> syms) {
     for (const auto& s : syms) {
         auto p = src_syms_.find({s.name, s.soname, s.version});
+        // TODO(akirakawata) Do we need this if? LoadDynSymtab should returns
+        // unique symbols.
         if (p == src_syms_.end() || p->second.second == NULL || !IsDefined(*p->second.second)) {
             src_syms_[{s.name, s.soname, s.version}] = {s.versym, s.sym};
         }
@@ -42,6 +44,13 @@ uintptr_t SymtabBuilder::AddSym(const Syminfo& sym) {
     return index;
 }
 
+// Returns true when the symbol specified with (name, soname, version) is
+// defined.
+// TODO(akawashiro) Is it true? Is there any defined symbols whose st_value is
+// 0?
+// When the specified symbol is not defined, SymtabBuilder::Resolve pushes it
+// to sym_ and exposed_syms_.
+// TODO(akawashiro) Rename syms_.
 bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, const std::string version, uintptr_t& val_or_index) {
     Symbol sym{};
     sym.sym.st_name = 0;
@@ -84,6 +93,7 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
     }
 }
 
+// TODO(akawashiro) Do we need syms_ in this function?
 uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string& soname, const std::string version) {
     // TODO(hamaji): Refactor.
     Symbol sym{};
@@ -115,6 +125,7 @@ uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string&
     return sym.index;
 }
 
+// Make a new symbol table from exposed_syms_.
 void SymtabBuilder::Build(StrtabBuilder& strtab, VersionBuilder& version) {
     for (const auto& s : exposed_syms_) {
         LOG(INFO) << "SymtabBuilder::Build " << s.name;
@@ -133,6 +144,7 @@ void SymtabBuilder::Build(StrtabBuilder& strtab, VersionBuilder& version) {
     }
 }
 
+// Pushes all public_syms_ into exposed_syms_.
 void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& version) {
     gnu_hash_.nbuckets = 1;
     CHECK(symtab_.size() <= std::numeric_limits<uint32_t>::max());
