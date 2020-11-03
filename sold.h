@@ -21,6 +21,8 @@ public:
 
     void Link(const std::string& out_filename);
 
+    const std::map<std::string, std::string> filename_to_soname() { return filename_to_soname_; };
+
 private:
     template <class T>
     void Write(FILE* fp, const T& v) {
