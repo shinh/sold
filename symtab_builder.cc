@@ -31,7 +31,7 @@ void SymtabBuilder::SetSrcSyms(std::vector<Syminfo> syms) {
     for (const auto& s : syms) {
         auto p = src_syms_.find({s.name, s.soname, s.version});
         // TODO(akirakawata) Do we need this if? LoadDynSymtab should returns
-        // unique symbols.
+        // unique symbols therefore p == src_syms_.end() is true always.
         if (p == src_syms_.end() || p->second.second == NULL || !IsDefined(*p->second.second)) {
             src_syms_[{s.name, s.soname, s.version}] = {s.versym, s.sym};
         }
@@ -93,7 +93,7 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
     }
 }
 
-// TODO(akawashiro) Do we need syms_ in this function?
+// Returns the index of symbol(name, soname, version)
 uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string& soname, const std::string version) {
     // TODO(hamaji): Refactor.
     Symbol sym{};
@@ -125,7 +125,7 @@ uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string&
     return sym.index;
 }
 
-// Make a new symbol table from exposed_syms_.
+// Make a new symbol table(symtab_) from exposed_syms_.
 void SymtabBuilder::Build(StrtabBuilder& strtab, VersionBuilder& version) {
     for (const auto& s : exposed_syms_) {
         LOG(INFO) << "SymtabBuilder::Build " << s.name;
@@ -144,7 +144,8 @@ void SymtabBuilder::Build(StrtabBuilder& strtab, VersionBuilder& version) {
     }
 }
 
-// Pushes all public_syms_ into exposed_syms_.
+// Pushes all public_syms_ into exposed_syms_ and symtab_.
+// TODO(akawashiro) Do we need changing exposed_syms_ here?
 void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& version) {
     gnu_hash_.nbuckets = 1;
     CHECK(symtab_.size() <= std::numeric_limits<uint32_t>::max());
@@ -164,6 +165,7 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
         // After I make complete section headers, I should fill it with the right section index.
         sym->st_shndx = 1;
 
+        // TODO(akawashiro) Is this versym value(VER_NDX_GLOBAL) is correct?
         Syminfo s{p.name, p.soname, p.version, VER_NDX_GLOBAL, sym};
         exposed_syms_.push_back(s);
         symtab_.push_back(*sym);

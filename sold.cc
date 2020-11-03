@@ -399,7 +399,7 @@ void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
 
 // Push all global symbols of main_binary_ into public_syms_.
 // Push all TLS symbols into public_syms_.
-// TODO(akawashiro) Do some of public_syms_ overlap with src_syms_?
+// TODO(akawashiro) Does public_syms_ overlap with exposed_syms_?
 void Sold::CopyPublicSymbols() {
     for (const auto& p : main_binary_->GetSymbolMap()) {
         const Elf_Sym* sym = p.sym;
