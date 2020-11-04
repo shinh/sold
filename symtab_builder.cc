@@ -46,8 +46,6 @@ uintptr_t SymtabBuilder::AddSym(const Syminfo& sym) {
 
 // Returns and fills st_value to value_or_index true when the symbol specified
 // with (name, soname, version) is defined.
-// TODO(akawashiro) Is it true? Is there any defined symbols whose st_value is
-// 0?
 // When the specified symbol is not defined, SymtabBuilder::Resolve pushes it
 // to sym_ and exposed_syms_ and fills the index of the added symbol to
 // val_or_index.
@@ -85,7 +83,7 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
         }
     }
 
-    if (!sym.sym.st_value) {
+    if (!IsDefined(sym.sym)) {
         val_or_index = sym.index;
         return false;
     } else {
