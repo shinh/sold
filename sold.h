@@ -220,8 +220,11 @@ private:
 
     void CollectArrays();
 
-    // Collect most concretely defined symbols from all link_binaries_ and set
-    // them as the src_syms_ of syms_.
+    // CollectSymbols collects all symbols in .dynsym of link_binaries_. When
+    // two symbols have the common symbol name, soname, and version, it selects
+    // a defined one and throws away the undefined one. If both of the two
+    // symbols are defined, one which was found earlier precedes. See
+    // LoadDynSymtab for more fine conditions.
     void CollectSymbols() {
         LOG(INFO) << "CollectSymbols";
 
