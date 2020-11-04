@@ -360,7 +360,6 @@ uintptr_t Sold::RemapTLS(const char* msg, ELFBinary* bin, uintptr_t off) {
 // Push symbols of bin to symtab.
 // When the same symbol is already in symtab, LoadDynSymtab selects a more
 // concretely defined one.
-// TODO(akawashiro) Raise an error when two same symbols are defined.
 void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
     bin->ReadDynSymtab(filename_to_soname_);
 
@@ -392,6 +391,11 @@ void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
             int prio2 = IsDefined(*sym2) ? 2 : ELF_ST_BIND(sym2->st_info) == STB_WEAK;
             if (prio > prio2) {
                 found->sym = sym;
+            }
+
+            if (prio == 2 && prio2 == 2) {
+                LOG(INFO) << "Symbol " << SOLD_LOG_KEY(p.name) << SOLD_LOG_KEY(p.soname) << SOLD_LOG_KEY(p.version)
+                          << " is defined in two shared objects.";
             }
         }
     }
