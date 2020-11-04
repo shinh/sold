@@ -44,12 +44,13 @@ uintptr_t SymtabBuilder::AddSym(const Syminfo& sym) {
     return index;
 }
 
-// Returns true when the symbol specified with (name, soname, version) is
-// defined.
+// Returns and fills st_value to value_or_index true when the symbol specified
+// with (name, soname, version) is defined.
 // TODO(akawashiro) Is it true? Is there any defined symbols whose st_value is
 // 0?
 // When the specified symbol is not defined, SymtabBuilder::Resolve pushes it
-// to sym_ and exposed_syms_.
+// to sym_ and exposed_syms_ and fills the index of the added symbol to
+// val_or_index.
 // TODO(akawashiro) Rename syms_.
 bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, const std::string version, uintptr_t& val_or_index) {
     Symbol sym{};

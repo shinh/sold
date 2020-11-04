@@ -443,6 +443,9 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
 
     LOG(INFO) << "Relocate " << bin->Str(sym->st_name) << " at " << rel->r_offset;
 
+    // Even if we found a defined symbol in src_syms_, we cannot
+    // erase the relocation entry. The address needs to be fixed at
+    // runtime by ASLR function so we set RELATIVE to these resolved symbols.
     switch (type) {
         // TODO(akawashiro) Check sym is invalid.
         // This relocation type doesn't need any symbol therefore sym
@@ -452,9 +455,6 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
             break;
         }
 
-        // Even if we found the defined symbol in src_syms_, we cannot
-        // erase this relocation entry. Because the address is fixed at
-        // runtime by ASLR function.
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT: {
             uintptr_t val_or_index;
