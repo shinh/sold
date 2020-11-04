@@ -208,7 +208,6 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index, const std::
                 if (vd->vd_ndx == versym_[index]) {
                     version = std::string(strtab_ + vda->vda_name);
                 }
-                vda = (Elf_Verdaux*)((char*)vda + vda->vda_next);
 
                 vd = (Elf_Verdef*)((char*)vd + vd->vd_next);
             }
