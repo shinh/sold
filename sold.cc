@@ -12,6 +12,7 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
     // Register (filename, soname) of main_binary_
     if (main_binary_->name() != "" && main_binary_->soname() != "") {
         filename_to_soname_[main_binary_->name()] = main_binary_->soname();
+        soname_to_filename_[main_binary_->soname()] = main_binary_->name();
         LOG(INFO) << SOLD_LOG_KEY(main_binary_->name()) << SOLD_LOG_KEY(main_binary_->soname());
     } else {
         // soname of main_binary_ can be empty when main_binary_ is executable file.
@@ -20,6 +21,8 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
 
     InitLdLibraryPaths();
     ResolveLibraryPaths(main_binary_.get());
+
+    version_.SetSonameToFilename(soname_to_filename_);
 }
 
 void Sold::Link(const std::string& out_filename) {
@@ -591,6 +594,7 @@ void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
             // Register (filename, soname)
             if (library->name() != "" && library->soname() != "") {
                 filename_to_soname_[library->name()] = library->soname();
+                soname_to_filename_[library->soname()] = library->name();
                 LOG(INFO) << SOLD_LOG_KEY(library->name()) << SOLD_LOG_KEY(library->soname());
             } else {
                 // soname of shared objects must be non-empty.

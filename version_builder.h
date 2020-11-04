@@ -24,9 +24,12 @@ public:
 
     void EmitVerneed(FILE* fp, StrtabBuilder& strtab);
 
+    void SetSonameToFilename(const std::map<std::string, std::string>& soname_to_filename) { soname_to_filename_ = soname_to_filename; }
+
 private:
     // vernum starts from 2 because 0 and 1 are used as VER_NDX_LOCAL and VER_NDX_GLOBAL.
     int vernum = 2;
     std::map<std::string, std::map<std::string, int>> data;
     std::vector<Elf_Versym> vers;
+    std::map<std::string, std::string> soname_to_filename_;
 };
