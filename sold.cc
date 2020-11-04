@@ -451,10 +451,11 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
     // erase the relocation entry. The address needs to be fixed at
     // runtime by ASLR function so we set RELATIVE to these resolved symbols.
     switch (type) {
-        // TODO(akawashiro) Check sym is invalid.
-        // This relocation type doesn't need any symbol therefore sym
-        // should be invalid, isn't it?
         case R_X86_64_RELATIVE: {
+            if (IsDefined(*sym)) {
+                LOG(WARNING) << "The symbol associated with R_X86_64_RELATIVE is defined. Because this relocation type doesn't need any "
+                                "symbol, something wrong may have happened.";
+            }
             newrel.r_addend += offset;
             break;
         }
