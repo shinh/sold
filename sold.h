@@ -326,6 +326,7 @@ private:
     std::vector<ELFBinary*> link_binaries_;
     std::map<ELFBinary*, uintptr_t> offsets_;
     std::map<std::string, std::string> filename_to_soname_;
+    std::map<std::string, std::string> soname_to_filename_;
     uintptr_t tls_file_offset_{0};
     uintptr_t tls_offset_{0};
     bool is_executable_{false};
