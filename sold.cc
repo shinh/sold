@@ -3,6 +3,24 @@
 #include <queue>
 #include <set>
 
+namespace {
+Elf_Versym CalcNewVersym(const Elf_Versym read_versym, const unsigned char st_info) {
+    Elf_Versym ret;
+    if (read_versym != ELFBinary::NO_VERSION_INFO) {
+        // We cannot reuse the old versym value(versym_[idx]) other than
+        // the case of is_special_ver_ndx(versym_[idx]). Because we build
+        // the new version information from scratch.
+        ret = is_special_ver_ndx(read_versym) ? read_versym : VersionBuilder::NEED_NEW_VERNUM;
+    } else {
+        // Infer an appropriate versym value when the ELF file doesn't have
+        // version information.
+        // TODO(akawashiro) Is it correct?
+        ret = ((ELF_ST_BIND(st_info) != STB_LOCAL) ? VER_NDX_GLOBAL : VER_NDX_LOCAL);
+    }
+    return ret;
+}
+}  // namespace
+
 Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, bool emit_section_header)
     : exclude_sos_(exclude_sos), emit_section_header_(emit_section_header) {
     main_binary_ = ReadELF(elf_filename);
@@ -368,7 +386,7 @@ void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
 
     uintptr_t offset = offsets_[bin];
 
-    for (const auto& p : bin->GetSymbolMap()) {
+    for (auto p : bin->GetSymbolMap()) {
         const std::string& name = p.name;
         Elf_Sym* sym = p.sym;
         if (IsTLS(*sym) && sym->st_shndx != SHN_UNDEF) {
@@ -377,6 +395,8 @@ void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
             sym->st_value += offset;
         }
         LOG(INFO) << "Symbol " << name << "@" << bin->name() << " " << sym->st_value;
+
+        p.versym = CalcNewVersym(p.versym, p.sym->st_info);
 
         Syminfo* found = NULL;
         for (int i = 0; i < symtab.size(); i++) {
@@ -408,8 +428,10 @@ void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
 // Push all TLS symbols into public_syms_.
 // TODO(akawashiro) Does public_syms_ overlap with exposed_syms_?
 void Sold::CopyPublicSymbols() {
-    for (const auto& p : main_binary_->GetSymbolMap()) {
+    for (auto p : main_binary_->GetSymbolMap()) {
         const Elf_Sym* sym = p.sym;
+        p.versym = CalcNewVersym(p.versym, p.sym->st_info);
+
         // TODO(akawashiro) Do we need this IsDefined check?
         if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
             LOG(INFO) << "Copy public symbol " << p.name;
@@ -419,7 +441,9 @@ void Sold::CopyPublicSymbols() {
     }
     for (ELFBinary* bin : link_binaries_) {
         if (bin == main_binary_.get()) continue;
-        for (const auto& p : bin->GetSymbolMap()) {
+        for (auto p : bin->GetSymbolMap()) {
+            p.versym = CalcNewVersym(p.versym, p.sym->st_info);
+
             const Elf_Sym* sym = p.sym;
             if (IsTLS(*sym)) {
                 LOG(INFO) << "Copy TLS symbol " << p.name;

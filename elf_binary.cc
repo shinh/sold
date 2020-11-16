@@ -132,18 +132,7 @@ void ELFBinary::ReadDynSymtab(const std::map<std::string, std::string>& filename
 
         // Get version information coresspoinds to idx
         auto p = GetVersion(idx, filename_to_soname);
-        Elf_Versym v;
-        if (versym_) {
-            // We cannot reuse the old versym value(versym_[idx]) other than
-            // the case of is_special_ver_ndx(versym_[idx]). Because we build
-            // the new version information from scratch.
-            v = is_special_ver_ndx(versym_[idx]) ? versym_[idx] : VersionBuilder::NEED_NEW_VERNUM;
-        } else {
-            // Infer an appropriate versym value when the ELF file doesn't have
-            // version information.
-            // TODO(akawashiro) Is it correct?
-            v = ((ELF_ST_BIND(sym->st_info) == STB_GLOBAL) ? VER_NDX_GLOBAL : VER_NDX_LOCAL);
-        }
+        Elf_Versym v = versym_ ? versym_[idx] : NO_VERSION_INFO;
 
         syms_.push_back(Syminfo{symname, p.first, p.second, v, sym});
     }

@@ -49,6 +49,7 @@ public:
 
     bool InTLS(uintptr_t offset) const;
 
+    static const Elf_Versym NO_VERSION_INFO = 0xffff;
     void ReadDynSymtab(const std::map<std::string, std::string>& filename_to_soname);
 
     const char* Str(uintptr_t name) { return strtab_ + name; }
