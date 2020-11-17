@@ -10,9 +10,7 @@
 
 class VersionBuilder {
 public:
-    static const Elf_Versym NEED_NEW_VERNUM = -1;
-
-    void Add(Elf_Versym ver, std::string filename, std::string version_name, StrtabBuilder& strtab);
+    void Add(Elf_Versym versym, const std::string& soname, const std::string& version, StrtabBuilder& strtab, const unsigned char st_info);
 
     uintptr_t SizeVersym() const { return vers.size() * sizeof(Elf_Versym); }
 

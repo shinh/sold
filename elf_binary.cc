@@ -390,7 +390,7 @@ std::string ELFBinary::ShowDynSymtab() {
     for (auto it : syms_) {
         ss << it.name << ": ";
 
-        if (it.versym == VersionBuilder::NEED_NEW_VERNUM) {
+        if (it.versym == NO_VERSION_INFO) {
             ss << "NO_VERSION_INFO";
         } else if (is_special_ver_ndx(it.versym)) {
             ss << special_ver_ndx_to_str(it.versym);

@@ -3,16 +3,6 @@
 
 #include <limits>
 
-namespace {
-Elf_Versym newver(Elf_Versym ver) {
-    if (ver == VER_NDX_LOCAL || ver == VER_NDX_GLOBAL) {
-        return ver;
-    } else {
-        return VersionBuilder::NEED_NEW_VERNUM;
-    }
-}
-}  // namespace
-
 SymtabBuilder::SymtabBuilder() {
     Syminfo si;
     si.name = "";
@@ -71,7 +61,7 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
                 LOG(INFO) << "Symbol (" << name << ", " << soname << ", " << version << ") found";
             } else {
                 LOG(INFO) << "Symbol (undef/weak) (" << name << ", " << soname << ", " << version << ") found";
-                Syminfo s{name, soname, version, newver(found->second.first), NULL};
+                Syminfo s{name, soname, version, found->second.first, NULL};
                 sym.index = AddSym(s);
                 CHECK(syms_.emplace(std::make_tuple(name, soname, version), sym).second);
             }
@@ -112,7 +102,7 @@ uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string&
         if (found != src_syms_.end()) {
             LOG(INFO) << "Symbol " << name << " found for copy";
             sym.sym = *found->second.second;
-            Syminfo s{name, soname, version, newver(found->second.first), NULL};
+            Syminfo s{name, soname, version, found->second.first, NULL};
             sym.index = AddSym(s);
             CHECK(syms_.emplace(std::make_tuple(name, soname, version), sym).second);
         } else {
@@ -139,7 +129,7 @@ void SymtabBuilder::Build(StrtabBuilder& strtab, VersionBuilder& version) {
         if (sym.st_shndx != SHN_UNDEF && sym.st_shndx < SHN_LORESERVE) sym.st_shndx = 1;
         symtab_.push_back(sym);
 
-        version.Add(s.versym, s.soname, s.version, strtab);
+        version.Add(s.versym, s.soname, s.version, strtab, sym.st_info);
     }
 }
 
@@ -164,15 +154,11 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
         // After I make complete section headers, I should fill it with the right section index.
         sym->st_shndx = 1;
 
-        CHECK(is_special_ver_ndx(p.versym) || p.versym == VersionBuilder::NEED_NEW_VERNUM) << SOLD_LOG_KEY(p);
-        CHECK((!is_special_ver_ndx(p.versym) && !p.soname.empty() && !p.version.empty()) ||
-              (is_special_ver_ndx(p.versym) && p.soname.empty() && p.version.empty()));
-
         Syminfo s{p.name, p.soname, p.version, p.versym, sym};
         exposed_syms_.push_back(s);
         symtab_.push_back(*sym);
 
-        version.Add(s.versym, s.soname, s.version, strtab);
+        version.Add(s.versym, s.soname, s.version, strtab, sym->st_info);
     }
     public_syms_.clear();
 }
