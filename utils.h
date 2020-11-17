@@ -37,6 +37,8 @@
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
 
+static const Elf_Versym NO_VERSION_INFO = 0xffff;
+
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep);
 
 bool HasPrefix(const std::string& str, const std::string& prefix);
@@ -84,7 +86,7 @@ struct TLS {
 
 bool is_special_ver_ndx(Elf64_Versym v);
 
-std::string special_ver_ndx_to_str(Elf64_Versym v);
+std::string special_ver_ndx_to_str(Elf_Versym v);
 
 template <class T>
 std::string HexString(T num, int length = 16) {

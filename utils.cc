@@ -48,6 +48,8 @@ std::string special_ver_ndx_to_str(Elf64_Versym versym) {
         return std::string("VER_NDX_LOCAL");
     } else if (versym == VER_NDX_GLOBAL) {
         return std::string("VER_NDX_GLOBAL");
+    } else if (versym == NO_VERSION_INFO) {
+        return std::string("NO_VERSION_INFO");
     } else {
         LOG(FATAL) << "This versym (= " << versym << ") is not special.";
         exit(1);

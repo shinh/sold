@@ -123,7 +123,6 @@ void ELFBinary::ReadDynSymtab(const std::map<std::string, std::string>& filename
     for (int idx : CollectSymbolsFromReloc(plt_rel_, num_plt_rels_)) indices.insert(idx);
 
     for (int idx : indices) {
-        // TODO(hamaji): Handle version symbols.
         Elf_Sym* sym = &symtab_[idx];
         if (sym->st_name == 0) continue;
         const std::string symname(strtab_ + sym->st_name);
@@ -133,7 +132,7 @@ void ELFBinary::ReadDynSymtab(const std::map<std::string, std::string>& filename
 
         // Get version information coresspoinds to idx
         auto p = GetVersion(idx, filename_to_soname);
-        Elf_Versym v = (versym_) ? versym_[idx] : -1;
+        Elf_Versym v = versym_ ? versym_[idx] : NO_VERSION_INFO;
 
         syms_.push_back(Syminfo{symname, p.first, p.second, v, sym});
     }
@@ -391,7 +390,7 @@ std::string ELFBinary::ShowDynSymtab() {
     for (auto it : syms_) {
         ss << it.name << ": ";
 
-        if (it.versym == VersionBuilder::NEED_NEW_VERNUM) {
+        if (it.versym == NO_VERSION_INFO) {
             ss << "NO_VERSION_INFO";
         } else if (is_special_ver_ndx(it.versym)) {
             ss << special_ver_ndx_to_str(it.versym);

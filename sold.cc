@@ -413,6 +413,7 @@ void Sold::LoadDynSymtab(ELFBinary* bin, std::vector<Syminfo>& symtab) {
 void Sold::CopyPublicSymbols() {
     for (const auto& p : main_binary_->GetSymbolMap()) {
         const Elf_Sym* sym = p.sym;
+
         // TODO(akawashiro) Do we need this IsDefined check?
         if (ELF_ST_BIND(sym->st_info) == STB_GLOBAL && IsDefined(*sym)) {
             LOG(INFO) << "Copy public symbol " << p.name;
