@@ -37,6 +37,10 @@
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
 
+// From binutils
+#define VERSYM_HIDDEN 0x8000
+#define VERSYM_VERSION 0x7fff
+
 static const Elf_Versym NO_VERSION_INFO = 0xffff;
 
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep);
