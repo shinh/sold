@@ -59,10 +59,7 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
         if (found == src_syms_.end() && soname.empty() && version.empty()) {
             // When we cannot find a symbol using (name, soname, version), we
             // try to find a symbol using only a name. In this case, you must
-            // not forget to check VERSYM_HIDDEN. Although there is no
-            // description of VERSYM_HIDDEN in glibc, you can find it in
-            // binutils source code.
-            // https://github.com/gittup/binutils/blob/8db2e9c8d085222ac7b57272ee263733ae193565/include/elf/common.h#L816
+            // not forget to check VERSYM_HIDDEN.
             LOG(INFO) << "Try to find " << name << " without version information.";
             found = std::find_if(src_syms_.begin(), src_syms_.end(),
                                  [&name](auto p) { return std::get<0>(p.first) == name && ((p.second.first & VERSYM_HIDDEN) == 0); });
