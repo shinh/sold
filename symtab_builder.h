@@ -41,8 +41,11 @@ private:
         uintptr_t index;
     };
 
-    // map from (name, soname, version) to Versym and Sym
+    // map from (name, soname, version) to (Versym, Sym*)
     std::map<std::tuple<std::string, std::string, std::string>, std::pair<Elf_Versym, Elf_Sym*> > src_syms_;
+    // map from name to (Versym, Sym*)
+    // We use src_fallback_syms_ when we don't have version information.
+    std::map<std::string, std::pair<Elf_Versym, Elf_Sym*> > src_fallback_syms_;
     std::map<std::tuple<std::string, std::string, std::string>, Symbol> syms_;
 
     std::vector<Syminfo> exposed_syms_;

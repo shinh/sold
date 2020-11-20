@@ -37,6 +37,12 @@
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
 
+// Although there is no description of VERSYM_HIDDEN in glibc, you can find it
+// in binutils source code.
+// https://github.com/gittup/binutils/blob/8db2e9c8d085222ac7b57272ee263733ae193565/include/elf/common.h#L816
+#define VERSYM_HIDDEN 0x8000
+#define VERSYM_VERSION 0x7fff
+
 static const Elf_Versym NO_VERSION_INFO = 0xffff;
 
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep);

@@ -1,6 +1,8 @@
 #include "symtab_builder.h"
 #include "version_builder.h"
 
+#include <algorithm>
+#include <functional>
 #include <limits>
 
 SymtabBuilder::SymtabBuilder() {
@@ -19,11 +21,17 @@ SymtabBuilder::SymtabBuilder() {
 
 void SymtabBuilder::SetSrcSyms(std::vector<Syminfo> syms) {
     for (const auto& s : syms) {
-        auto p = src_syms_.find({s.name, s.soname, s.version});
+        auto found = src_syms_.find({s.name, s.soname, s.version});
         // TODO(akirakawata) Do we need this if? LoadDynSymtab should returns
-        // unique symbols therefore p == src_syms_.end() is true always.
-        if (p == src_syms_.end() || p->second.second == NULL || !IsDefined(*p->second.second)) {
+        // unique symbols therefore found == src_syms_.end() is true always.
+        if (found == src_syms_.end() || found->second.second == NULL || !IsDefined(*found->second.second)) {
             src_syms_[{s.name, s.soname, s.version}] = {s.versym, s.sym};
+        }
+
+        auto found_fallback = src_fallback_syms_.find(s.name);
+        if ((s.versym & VERSYM_HIDDEN) == 0 && (found_fallback == src_fallback_syms_.end() || found_fallback->second.second == NULL ||
+                                                !IsDefined(*found_fallback->second.second))) {
+            src_fallback_syms_[s.name] = {s.versym, s.sym};
         }
     }
 }
@@ -53,15 +61,31 @@ bool SymtabBuilder::Resolve(const std::string& name, const std::string& soname, 
     if (found != syms_.end()) {
         sym = found->second;
     } else {
-        auto found = src_syms_.find({name, soname, version});
+        Elf_Versym versym = 0;
+        Elf_Sym* symp = nullptr;
 
-        if (found != src_syms_.end()) {
-            sym.sym = *found->second.second;
+        {
+            auto found = src_syms_.find({name, soname, version});
+            if (found != src_syms_.end()) {
+                versym = found->second.first;
+                symp = found->second.second;
+            } else {
+                auto found_fallback = src_fallback_syms_.find(name);
+                if (found_fallback != src_fallback_syms_.end()) {
+                    LOG(INFO) << "Use fallback version of " << name;
+                    versym = found_fallback->second.first;
+                    symp = found_fallback->second.second;
+                }
+            }
+        }
+
+        if (symp != nullptr) {
+            sym.sym = *symp;
             if (IsDefined(sym.sym)) {
                 LOG(INFO) << "Symbol (" << name << ", " << soname << ", " << version << ") found";
             } else {
                 LOG(INFO) << "Symbol (undef/weak) (" << name << ", " << soname << ", " << version << ") found";
-                Syminfo s{name, soname, version, found->second.first, NULL};
+                Syminfo s{name, soname, version, versym, NULL};
                 sym.index = AddSym(s);
                 CHECK(syms_.emplace(std::make_tuple(name, soname, version), sym).second);
             }
@@ -97,12 +121,28 @@ uintptr_t SymtabBuilder::ResolveCopy(const std::string& name, const std::string&
     if (found != syms_.end()) {
         sym = found->second;
     } else {
-        auto found = src_syms_.find({name, soname, version});
+        Elf_Versym versym = 0;
+        Elf_Sym* symp = nullptr;
 
-        if (found != src_syms_.end()) {
+        {
+            auto found = src_syms_.find({name, soname, version});
+            if (found != src_syms_.end()) {
+                versym = found->second.first;
+                symp = found->second.second;
+            } else {
+                auto found_fallback = src_fallback_syms_.find(name);
+                if (found_fallback != src_fallback_syms_.end()) {
+                    LOG(INFO) << "Use fallback version of " << name;
+                    versym = found_fallback->second.first;
+                    symp = found_fallback->second.second;
+                }
+            }
+        }
+
+        if (symp != nullptr) {
             LOG(INFO) << "Symbol " << name << " found for copy";
-            sym.sym = *found->second.second;
-            Syminfo s{name, soname, version, found->second.first, NULL};
+            sym.sym = *symp;
+            Syminfo s{name, soname, version, versym, NULL};
             sym.index = AddSym(s);
             CHECK(syms_.emplace(std::make_tuple(name, soname, version), sym).second);
         } else {
