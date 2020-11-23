@@ -1,10 +1,14 @@
 # TODO
 
 - TLS
-- versym
 - aarch64
 - exe
 - 32
+
+## Failed tests
+- setjmp-gcc
+- tls-bss-g++
+- tls-bss-gcc
 
 ## Test with Docker
 ```
