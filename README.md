@@ -9,6 +9,7 @@
 - setjmp-gcc
 - tls-bss-g++
 - tls-bss-gcc
+- static-in-function-g++
 
 ## Test with Docker
 ```
