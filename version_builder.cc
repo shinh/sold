@@ -54,8 +54,10 @@ uintptr_t VersionBuilder::SizeVerneed() const {
 }
 
 void VersionBuilder::EmitVersym(FILE* fp) {
-    for (auto v : vers) {
-        CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
+    if (data.size() > 0) {
+        for (auto v : vers) {
+            CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
+        }
     }
 }
 
