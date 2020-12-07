@@ -17,23 +17,5 @@ jobs:
       run: cmake --build build
     - name: Test
       run: cd build && ctest --output-on-failure
-    - name: hello-gcc
-      run: cd tests/hello-gcc && ./test.sh
-    - name: hello-g++
-      run: cd tests/hello-g++ && ./test.sh
-    - name: just-return-gcc 
-      run: cd tests/just-return-gcc && ./test.sh
-    - name: just-return-g++
-      run: cd tests/just-return-g++ && ./test.sh
-    - name: simple-lib-gcc
-      run: cd tests/simple-lib-gcc && ./test.sh
-    - name: simple-lib-g++
-      run: cd tests/simple-lib-g++ && ./test.sh
-    - name: version-gcc
-      run: cd tests/version-gcc && ./test.sh
-    - name: tls-lib-gcc
-      run: cd tests/tls-lib-gcc && ./test.sh
-    - name: tls-lib-gcc-without-base
-      run: cd tests/tls-lib-gcc-without-base && ./test.sh
-    - name: tls-multiple-lib-gcc
-      run: cd tests/tls-multiple-lib-gcc && ./test.sh
+    - name: run-all-tests
+      run: cd tests && ./run-all-tests.sh
