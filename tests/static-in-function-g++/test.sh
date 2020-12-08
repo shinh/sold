@@ -14,4 +14,4 @@ ln -sf lib.so.soldout lib.so
 # Use original
 # ln -sf lib.so.original lib.so
 
-./main
+LD_LIBRARY_PATH=. ./main

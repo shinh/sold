@@ -12,7 +12,7 @@ class VersionBuilder {
 public:
     void Add(Elf_Versym versym, const std::string& soname, const std::string& version, StrtabBuilder& strtab, const unsigned char st_info);
 
-    uintptr_t SizeVersym() const { return vers.size() * sizeof(Elf_Versym); }
+    uintptr_t SizeVersym() const { return (data.size() > 0) ? vers.size() * sizeof(Elf_Versym) : 0; }
 
     uintptr_t SizeVerneed() const;
 

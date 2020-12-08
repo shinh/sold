@@ -48,8 +48,10 @@ void Sold::Link(const std::string& out_filename) {
 
     shdr_.RegisterShdr(GnuHashOffset(), GnuHashSize(), ShdrBuilder::ShdrType::GnuHash);
     shdr_.RegisterShdr(SymtabOffset(), SymtabSize(), ShdrBuilder::ShdrType::Dynsym, sizeof(Elf_Sym));
-    shdr_.RegisterShdr(VersymOffset(), VersymSize(), ShdrBuilder::ShdrType::GnuVersion, sizeof(Elf_Versym));
-    shdr_.RegisterShdr(VerneedOffset(), VerneedSize(), ShdrBuilder::ShdrType::GnuVersionR, 0, version_.NumVerneed());
+    if (version_.NumVerneed() > 0) {
+        shdr_.RegisterShdr(VersymOffset(), VersymSize(), ShdrBuilder::ShdrType::GnuVersion, sizeof(Elf_Versym));
+        shdr_.RegisterShdr(VerneedOffset(), VerneedSize(), ShdrBuilder::ShdrType::GnuVersionR, 0, version_.NumVerneed());
+    }
     shdr_.RegisterShdr(RelOffset(), RelSize(), ShdrBuilder::ShdrType::RelaDyn, sizeof(Elf_Rel));
     shdr_.RegisterShdr(InitArrayOffset(), InitArraySize(), ShdrBuilder::ShdrType::InitArray);
     shdr_.RegisterShdr(FiniArrayOffset(), FiniArraySize(), ShdrBuilder::ShdrType::FiniArray);
@@ -190,9 +192,11 @@ void Sold::BuildDynamic() {
     MakeDyn(DT_SYMTAB, SymtabOffset());
     MakeDyn(DT_SYMENT, sizeof(Elf_Sym));
 
-    MakeDyn(DT_VERSYM, VersymOffset());
-    MakeDyn(DT_VERNEEDNUM, version_.NumVerneed());
-    MakeDyn(DT_VERNEED, VerneedOffset());
+    if (version_.NumVerneed() > 0) {
+        MakeDyn(DT_VERSYM, VersymOffset());
+        MakeDyn(DT_VERNEEDNUM, version_.NumVerneed());
+        MakeDyn(DT_VERNEED, VerneedOffset());
+    }
 
     MakeDyn(DT_RELA, RelOffset());
     MakeDyn(DT_RELAENT, sizeof(Elf_Rel));

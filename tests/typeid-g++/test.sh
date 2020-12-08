@@ -10,9 +10,9 @@ mv lib.so lib.so.original
 # Use sold
 ln -sf lib.so.soldout lib.so
 echo ----------- Use sold -----------
-./main
+LD_LIBRARY_PATH=. ./main
 
 # Use original
 ln -sf lib.so.original lib.so
 echo ----------- Use original -----------
-./main
+LD_LIBRARY_PATH=. ./main
