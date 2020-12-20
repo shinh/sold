@@ -100,8 +100,22 @@ bool is_special_ver_ndx(Elf64_Versym v);
 std::string special_ver_ndx_to_str(Elf_Versym v);
 
 template <class T>
-std::string HexString(T num, int length = 16) {
+inline std::string HexString(T num, int length = 16) {
     std::stringstream ss;
     ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << num;
+    return ss.str();
+}
+
+template <>
+inline std::string HexString<char*>(char* num, int length) {
+    std::stringstream ss;
+    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << reinterpret_cast<uint64_t>(num);
+    return ss.str();
+}
+
+template <>
+inline std::string HexString<const char*>(const char* num, int length) {
+    std::stringstream ss;
+    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << reinterpret_cast<const uint64_t>(num);
     return ss.str();
 }
