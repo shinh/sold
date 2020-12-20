@@ -521,14 +521,14 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
             //   uint64_t ti_offset; <--- offset_on_got
             // } tls_index;
             //
-            // In TLS generic dynamic model, both of ti_module and
-            // ti_offset are rewrite by R_X86_64_DTPMOD64 and
-            // R_X86_64_DTPOFF64, respectively.
+            // In TLS generic dynamic model, both ti_module and ti_offset are
+            // rewritten by R_X86_64_DTPMOD64 and R_X86_64_DTPOFF64,
+            // respectively.
             //
-            // In TLS local dynamic model, only ti_module is
-            // rewrite by R_X86_64_DTPMOD64 and offset_on_got is fixed
-            // in the link process. Therefore, we must rewrite the fixed
-            // offset because we remap the TLS template image.
+            // In TLS local dynamic model, the only ti_module is rewrite by
+            // R_X86_64_DTPMOD64 and ti_offset is fixed in the link process. We
+            // must rewrite the fixed ti_offset because we remap the TLS
+            // template.
 
             std::vector<int> rewrite_rel_types;  // Type of relocations which rewrite ti_module.
             for (size_t i = 0; i < bin->num_rels(); ++i) {
@@ -556,13 +556,13 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
                 << "The symbol associated with R_X86_64_DTPMOD64 in TLS local dynamic model should be the dummy.";
 
             if (is_bss) {
-                // .tbss is remapped from
+                // TLS variables without initial values are remapped from
                 // [bin->tls()->p_filesz, bin->tls()->p_memsz) to
                 // [tls_.data[tls_.bin_to_index[bin]].bss_offset,
                 //  tls_.data[tls_.bin_to_index[bin]].bss_offset + bin->tls()->p_memsz - bin->tls()->p_filesz)
                 *offset_on_got += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
             } else {
-                // .tdata is remapped from
+                // TLS variables with initial values are remapped from
                 // [0, bin->tls()->p_filesz) to
                 // [tls_.data[tls_.bin_to_index[bin]].file_offset,
                 //  tls_.data[tls_.bin_to_index[bin]].file_offset + bin->tls()->p_filesz)
