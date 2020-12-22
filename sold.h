@@ -205,6 +205,7 @@ private:
         }
     }
 
+    // Emit TLS initialization image
     void EmitTLS(FILE* fp) {
         EmitPad(fp, tls_file_offset_);
         CHECK(ftell(fp) == TLSOffset());

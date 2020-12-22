@@ -35,6 +35,7 @@ public:
     size_t num_plt_rels() const { return num_plt_rels_; }
 
     const char* head() const { return head_; }
+    size_t size() const { return size_; }
 
     const std::string& name() const { return name_; }
 
@@ -48,6 +49,8 @@ public:
     Range GetRange() const;
 
     bool InTLS(uintptr_t offset) const;
+    bool InTLSData(uintptr_t offset) const;
+    bool InTLSBSS(uintptr_t offset) const;
 
     void ReadDynSymtab(const std::map<std::string, std::string>& filename_to_soname);
 
@@ -73,14 +76,15 @@ public:
 
     std::pair<std::string, std::string> GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname);
 
+    Elf_Addr OffsetFromAddr(Elf_Addr addr);
+    Elf_Addr AddrFromOffset(Elf_Addr offset);
+
 private:
     void ParsePhdrs();
 
     void ParseDynamic(size_t off, size_t size);
 
     void ParseFuncArray(uintptr_t* array, uintptr_t size, std::vector<uintptr_t>* out);
-
-    Elf_Addr OffsetFromAddr(Elf_Addr addr);
 
     const std::string filename_;
     int fd_;

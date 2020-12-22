@@ -13,6 +13,9 @@
 
 #define SOLD_LOG_KEY_VALUE(key, value) " " << key << "=" << value
 #define SOLD_LOG_KEY(key) SOLD_LOG_KEY_VALUE(#key, key)
+#define SOLD_LOG_64BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 16))
+#define SOLD_LOG_32BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 8))
+#define SOLD_LOG_16BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 4))
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
@@ -72,7 +75,9 @@ struct Syminfo {
     Elf_Sym* sym;
 };
 
+std::string ShowRelocationType(int type);
 std::ostream& operator<<(std::ostream& os, const Syminfo& s);
+std::ostream& operator<<(std::ostream& os, const Elf_Rel& s);
 
 struct TLS {
     struct Data {
@@ -95,8 +100,22 @@ bool is_special_ver_ndx(Elf64_Versym v);
 std::string special_ver_ndx_to_str(Elf_Versym v);
 
 template <class T>
-std::string HexString(T num, int length = 16) {
+inline std::string HexString(T num, int length = 16) {
     std::stringstream ss;
     ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << num;
+    return ss.str();
+}
+
+template <>
+inline std::string HexString<char*>(char* num, int length) {
+    std::stringstream ss;
+    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << reinterpret_cast<uint64_t>(num);
+    return ss.str();
+}
+
+template <>
+inline std::string HexString<const char*>(const char* num, int length) {
+    std::stringstream ss;
+    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << reinterpret_cast<const uint64_t>(num);
     return ss.str();
 }

@@ -1,7 +1,7 @@
 #include "hoge.h"
 
 namespace {
-thread_local uint64_t hoge_data = 0xABCDEFAB;
+thread_local uint64_t hoge_data = 0xABCDEFABCDEFABCD;
 thread_local uint64_t hoge_bss;
 }  // namespace
 

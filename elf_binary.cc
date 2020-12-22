@@ -58,6 +58,20 @@ bool ELFBinary::InTLS(uintptr_t offset) const {
     return false;
 }
 
+bool ELFBinary::InTLSData(uintptr_t tls_offset) const {
+    if (tls_ && tls_offset < tls_->p_memsz) {
+        return tls_offset < tls_->p_filesz;
+    }
+    LOG(FATAL) << SOLD_LOG_KEY(tls_) << SOLD_LOG_KEY(tls_offset);
+}
+
+bool ELFBinary::InTLSBSS(uintptr_t tls_offset) const {
+    if (tls_ && tls_offset < tls_->p_memsz) {
+        return (tls_->p_filesz <= tls_offset);
+    }
+    LOG(FATAL) << SOLD_LOG_KEY(tls_) << SOLD_LOG_KEY(tls_offset);
+}
+
 namespace {
 
 std::set<int> CollectSymbolsFromReloc(const Elf_Rel* rels, size_t num) {
@@ -376,12 +390,20 @@ void ELFBinary::ParseFuncArray(uintptr_t* array, uintptr_t size, std::vector<uin
 
 Elf_Addr ELFBinary::OffsetFromAddr(Elf_Addr addr) {
     for (Elf_Phdr* phdr : loads_) {
-        if (phdr->p_vaddr <= addr && addr < phdr->p_vaddr + phdr->p_memsz) {
+        if (phdr->p_vaddr <= addr && addr <= phdr->p_vaddr + phdr->p_memsz) {
             return addr - phdr->p_vaddr + phdr->p_offset;
         }
     }
-    LOG(INFO) << "Address " << static_cast<long long>(addr) << " cannot be resolved";
-    abort();
+    LOG(FATAL) << "Address " << HexString(addr, 16) << " cannot be resolved";
+}
+
+Elf_Addr ELFBinary::AddrFromOffset(Elf_Addr offset) {
+    for (Elf_Phdr* phdr : loads_) {
+        if (phdr->p_offset <= offset && offset <= phdr->p_offset + phdr->p_filesz) {
+            return offset - phdr->p_offset + phdr->p_vaddr;
+        }
+    }
+    LOG(FATAL) << "Offset " << HexString(offset, 16) << " cannot be resolved";
 }
 
 std::string ELFBinary::ShowDynSymtab() {

@@ -3,7 +3,7 @@
 #include <iostream>
 
 int main() {
-    std::cout << "=========== libfugahoge.so.original ==========" << std::endl;
+    std::cout << "---------- libfugahoge.so.original ----------" << std::endl;
     void* handle = dlopen("./libfugahoge.so.original", RTLD_LAZY);
     if (handle == NULL) {
         std::cout << "Cannot find libfugahoge.so.original" << std::endl;
@@ -16,7 +16,7 @@ int main() {
     }
     show_fuga_hoge();
 
-    std::cout << "=========== libfugahoge.so.soldout ==========" << std::endl;
+    std::cout << "---------- libfugahoge.so.soldout ----------" << std::endl;
     handle = dlopen("./libfugahoge.so.soldout", RTLD_LAZY);
     if (handle == NULL) {
         std::cout << "Cannot find libfugahoge.so.soldout" << std::endl;

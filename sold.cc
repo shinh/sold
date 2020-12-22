@@ -496,9 +496,91 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
             break;
         }
 
-        // TODO(akawashiro) Fill here with some exaplanation.
-        case R_X86_64_DTPMOD64:
-        case R_X86_64_DTPOFF64:
+        // TODO(akawashiro) Handle TLS variables in executables.
+        case R_X86_64_DTPMOD64: {
+            // TODO(akawashiro) Refactor out for Arch64
+            const std::string name = bin->Str(sym->st_name);
+            uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+            newrel.r_info = ELF_R_INFO(index, type);
+
+            if (bin->tls() == NULL) {
+                LOG(INFO) << SOLD_LOG_64BITS(bin->tls()) << " is null. This relocation is TLS generic dynamic model.";
+                break;
+            }
+
+            uint64_t* mod_on_got =
+                const_cast<uint64_t*>(reinterpret_cast<const uint64_t*>(bin->head() + bin->OffsetFromAddr(rel->r_offset)));
+            uint64_t* offset_on_got = mod_on_got + 1;
+            const bool is_bss = bin->InTLSBSS(*offset_on_got);
+
+            // We assume dl_tls_index exists in GOT. This struct is used as
+            // the argument of __tls_get_addr.
+            //
+            // typedef struct dl_tls_index
+            // {
+            //   uint64_t ti_module; <--- mod_on_got
+            //   uint64_t ti_offset; <--- offset_on_got
+            // } tls_index;
+            //
+            // In TLS generic dynamic model, both ti_module and ti_offset are
+            // rewritten by R_X86_64_DTPMOD64 and R_X86_64_DTPOFF64,
+            // respectively.
+            //
+            // In TLS local dynamic model, the only ti_module is rewrite by
+            // R_X86_64_DTPMOD64 and ti_offset is fixed in the link process. We
+            // must rewrite the fixed ti_offset because we remap the TLS
+            // template.
+
+            std::vector<int> rewrite_rel_types;  // Type of relocations which rewrite ti_module.
+            for (size_t i = 0; i < bin->num_rels(); ++i) {
+                if (rel->r_offset + sizeof(uint64_t) <= bin->rel()[i].r_offset &&
+                    bin->rel()[i].r_offset < rel->r_offset + sizeof(uint64_t) + sizeof(uint64_t)) {
+                    rewrite_rel_types.emplace_back(ELF_R_TYPE(bin->rel()[i].r_info));
+                }
+            }
+
+            CHECK(rewrite_rel_types.size() == 0 || (rewrite_rel_types.size() == 1 && rewrite_rel_types[0] == R_X86_64_DTPOFF64))
+                << SOLD_LOG_KEY(rewrite_rel_types.size()) << SOLD_LOG_KEY(ShowRelocationType(rewrite_rel_types[0]));
+
+            if (rewrite_rel_types.size() == 1) {
+                LOG(INFO) << "R_X86_64_DTPOFF64 exists next to R_X86_64_DTPMOD64. This relocation is TLS generic dynamic model.";
+                break;
+            }
+
+            LOG(INFO) << "R_X86_64_DTPMOD64 relocation in TLS local dynamic model. " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
+                      << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset)) << SOLD_LOG_64BITS(*mod_on_got)
+                      << SOLD_LOG_64BITS(*offset_on_got) << SOLD_LOG_64BITS(bin->tls()->p_filesz) << SOLD_LOG_KEY(is_bss)
+                      << SOLD_LOG_64BITS(tls_.data[tls_.bin_to_index[bin]].file_offset)
+                      << SOLD_LOG_64BITS(tls_.data[tls_.bin_to_index[bin]].bss_offset);
+
+            CHECK(ELF_R_SYM(rel->r_info) == 0)
+                << "The symbol associated with R_X86_64_DTPMOD64 in TLS local dynamic model should be the dummy.";
+
+            if (is_bss) {
+                // TLS variables without initial values are remapped from
+                // [bin->tls()->p_filesz, bin->tls()->p_memsz) to
+                // [tls_.data[tls_.bin_to_index[bin]].bss_offset,
+                //  tls_.data[tls_.bin_to_index[bin]].bss_offset + bin->tls()->p_memsz - bin->tls()->p_filesz)
+                *offset_on_got += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
+            } else {
+                // TLS variables with initial values are remapped from
+                // [0, bin->tls()->p_filesz) to
+                // [tls_.data[tls_.bin_to_index[bin]].file_offset,
+                //  tls_.data[tls_.bin_to_index[bin]].file_offset + bin->tls()->p_filesz)
+                *offset_on_got += tls_.data[tls_.bin_to_index[bin]].file_offset;
+            }
+            break;
+        }
+
+        case R_X86_64_DTPOFF64: {
+            const std::string name = bin->Str(sym->st_name);
+            uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+            newrel.r_info = ELF_R_INFO(index, type);
+            LOG(INFO) << "R_X86_64_DTPOFF64 relocation: " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
+                      << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset));
+            break;
+        }
+
         case R_X86_64_COPY: {
             const std::string name = bin->Str(sym->st_name);
             uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
