@@ -498,6 +498,7 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
 
         // TODO(akawashiro) Handle TLS variables in executables.
         case R_X86_64_DTPMOD64: {
+            // TODO(akawashiro) Refactor out for Arch64
             const std::string name = bin->Str(sym->st_name);
             uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
             newrel.r_info = ELF_R_INFO(index, type);
