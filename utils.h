@@ -1,6 +1,7 @@
 #pragma once
 
 #include <elf.h>
+#include <libdwarf/dwarf.h>
 
 #include <cassert>
 #include <iomanip>
@@ -17,6 +18,7 @@
 #define SOLD_LOG_32BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 8))
 #define SOLD_LOG_16BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 4))
 #define SOLD_LOG_8BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 2))
+#define SOLD_LOG_DWEHPE(type) SOLD_LOG_KEY_VALUE(#type, ShowDW_EH_PE(type))
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
@@ -40,6 +42,9 @@
 #define ELF_R_SYM(val) ELF64_R_SYM(val)
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
+
+// 0xee is never used as a valid DWARF Exception Header value
+#define DW_EH_PE_SOLD_DUMMY 0xee
 
 // Although there is no description of VERSYM_HIDDEN in glibc, you can find it
 // in binutils source code.
@@ -77,6 +82,7 @@ struct Syminfo {
 };
 
 std::string ShowRelocationType(int type);
+std::string ShowDW_EH_PE(uint8_t type);
 std::ostream& operator<<(std::ostream& os, const Syminfo& s);
 std::ostream& operator<<(std::ostream& os, const Elf_Rel& s);
 

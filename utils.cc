@@ -39,6 +39,70 @@ std::ostream& operator<<(std::ostream& os, const Syminfo& s) {
     return os;
 }
 
+std::string ShowDW_EH_PE(uint8_t type) {
+    if (type == DW_EH_PE_omit) {
+        return "DW_EH_PE_omit";
+    }
+
+    std::string ret;
+
+    switch (type & 0xf) {
+        case DW_EH_PE_absptr:
+            ret = "DW_EH_PE_absptr";
+            break;
+        case DW_EH_PE_uleb128:
+            ret = "DW_EH_PE_uleb128";
+            break;
+        case DW_EH_PE_udata2:
+            ret = "DW_EH_PE_udata2";
+            break;
+        case DW_EH_PE_udata4:
+            ret = "DW_EH_PE_udata4";
+            break;
+        case DW_EH_PE_udata8:
+            ret = "DW_EH_PE_udata8";
+            break;
+        case DW_EH_PE_sleb128:
+            ret = "DW_EH_PE_sleb128";
+            break;
+        case DW_EH_PE_sdata2:
+            ret = "DW_EH_PE_sdata2";
+            break;
+        case DW_EH_PE_sdata4:
+            ret = "DW_EH_PE_sdata4";
+            break;
+        case DW_EH_PE_sdata8:
+            ret = "DW_EH_PE_sdata8";
+            break;
+    }
+
+    switch (type & 0xf0) {
+        case DW_EH_PE_pcrel:
+            ret += " + DW_EH_PE_pcrel";
+            break;
+        case DW_EH_PE_textrel:
+            ret += " + DW_EH_PE_textrel";
+            break;
+        case DW_EH_PE_datarel:
+            ret += " + DW_EH_PE_datarel";
+            break;
+        case DW_EH_PE_funcrel:
+            ret += " + DW_EH_PE_funcrel";
+            break;
+        case DW_EH_PE_aligned:
+            ret += " + DW_EH_PE_aligned";
+            break;
+    }
+
+    if (type == DW_EH_PE_SOLD_DUMMY) {
+        ret = "DW_EH_PE_SOLD_DUMMY(0xEE)";
+    } else if (ret == "") {
+        ret = HexString(type, 2);
+    }
+
+    return ret;
+}
+
 std::string ShowRelocationType(int type) {
     switch (type) {
         case R_X86_64_NONE:
