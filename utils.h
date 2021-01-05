@@ -116,4 +116,8 @@ inline std::string HexString(T num, int length = -1) {
     return ss.str();
 }
 
+const char* read_uleb128(const char* p, uint32_t* val);
+const char* read_sleb128(const char* p, int32_t* val);
 
+typedef unsigned sold_Unwind_Ptr __attribute__((__mode__(__word__)));
+const char* read_encoded_value_with_base(unsigned char encoding, sold_Unwind_Ptr base, const char* p, uint32_t* val);
