@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install requirements
-      run: sudo apt install ninja-build
+      run: sudo apt install ninja-build libdwarf-dev
     - name: CMake
       run: mkdir build && cd build && cmake -GNinja ..
     - name: Build

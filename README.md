@@ -1,15 +1,15 @@
-# TODO
+## How to build
+You need `libdwarf-dev` package.
 
-- TLS
-- aarch64
-- exe
-- 32
+## TODO
+- TLS in executables
+- AArch64
+- x86-32
 
 ## Failed tests
 - setjmp-gcc
 - tls-bss-g++
 - tls-bss-gcc
-- static-in-function-g++
 
 ## Test with Docker
 ```
