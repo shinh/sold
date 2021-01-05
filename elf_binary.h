@@ -102,12 +102,10 @@ public:
     void PrintVersyms();
 
     std::string ShowDynSymtab();
-
     std::string ShowDtRela();
-
     std::string ShowVersion();
-
     std::string ShowTLS();
+    std::string ShowEHFrame();
 
     std::pair<std::string, std::string> GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname);
 

@@ -426,6 +426,33 @@ void ELFBinary::ParseEHFrameHeader(size_t off, size_t size) {
         eh_frame_header_.cies.emplace_back(cie);
     }
 }
+
+std::string ELFBinary::ShowEHFrame() {
+    std::stringstream ss;
+
+    ss << "version: " << HexString(eh_frame_header_.version) << "\n";
+    ss << "eh_frame_ptr_enc: " << ShowDW_EH_PE(eh_frame_header_.eh_frame_ptr_enc) << "\n";
+    ss << "fde_count_enc: " << ShowDW_EH_PE(eh_frame_header_.fde_count_enc) << "\n";
+    ss << "table_enc: " << ShowDW_EH_PE(eh_frame_header_.table_enc) << "\n";
+    ss << "eh_frame_ptr: " << HexString(eh_frame_header_.eh_frame_ptr) << "\n";
+    ss << "fde_count: " << eh_frame_header_.fde_count << "\n";
+    for (int i = 0; i < eh_frame_header_.fde_count; i++) {
+        ss << "---------- table[" << i << "] ----------\n";
+        ss << "initial_loc: " << HexString(eh_frame_header_.table[i].initial_loc) << "\n";
+        ss << "fde_ptr: " << HexString(eh_frame_header_.table[i].fde_ptr) << "\n";
+        ss << "cie.length: " << HexString(eh_frame_header_.cies[i].length) << "\n";
+        ss << "cie.CIE_id: " << HexString(eh_frame_header_.cies[i].CIE_id) << "\n";
+        ss << "cie.version: " << HexString(eh_frame_header_.cies[i].version) << "\n";
+        ss << "cie.FDE_encoding: " << ShowDW_EH_PE(eh_frame_header_.cies[i].FDE_encoding) << "\n";
+        ss << "cie.LSDA_encoding: " << ShowDW_EH_PE(eh_frame_header_.cies[i].LSDA_encoding) << "\n";
+        ss << "fde.length: " << HexString(eh_frame_header_.fdes[i].length) << "\n";
+        ss << "fde.CIE_delta: " << HexString(eh_frame_header_.fdes[i].CIE_delta) << "\n";
+        ss << "fde.initial_loc: " << HexString(eh_frame_header_.fdes[i].initial_loc) << "\n";
+    }
+
+    return ss.str();
+}
+
 void ELFBinary::ParseDynamic(size_t off, size_t size) {
     size_t dyn_size = sizeof(Elf_Dyn);
     CHECK(size % dyn_size == 0);
