@@ -344,8 +344,8 @@ void ELFBinary::ParseEHFrameHeader(size_t off, size_t size) {
                   << SOLD_LOG_32BITS(AddrFromOffset(off)) << SOLD_LOG_32BITS(AddrFromOffset(off) + e.fde_ptr)
                   << SOLD_LOG_32BITS(OffsetFromAddr(AddrFromOffset(off) + e.fde_ptr));
 
-        FDE fde = {};
-        CIE cie = {};
+        EHFrameHeader::FDE fde = {};
+        EHFrameHeader::CIE cie = {};
         cie.FDE_encoding = DW_EH_PE_SOLD_DUMMY;
         cie.LSDA_encoding = DW_EH_PE_SOLD_DUMMY;
 

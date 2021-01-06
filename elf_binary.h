@@ -8,26 +8,26 @@
 #include <map>
 #include <memory>
 
-struct CIE {
-    uint32_t length;
-    int32_t CIE_id;
-    uint8_t version;
-    const char* aug_str;
-    uint8_t FDE_encoding;
-    uint8_t LSDA_encoding;
-};
-
-struct FDE {
-    uint32_t length;
-    uint64_t extended_length;
-    int32_t CIE_delta;
-    int32_t initial_loc;
-};
-
 struct EHFrameHeader {
     struct FDETableEntry {
         int32_t initial_loc;
         int32_t fde_ptr;
+    };
+
+    struct CIE {
+        uint32_t length;
+        int32_t CIE_id;
+        uint8_t version;
+        const char* aug_str;
+        uint8_t FDE_encoding;
+        uint8_t LSDA_encoding;
+    };
+
+    struct FDE {
+        uint32_t length;
+        uint64_t extended_length;
+        int32_t CIE_delta;
+        int32_t initial_loc;
     };
 
     uint8_t version;
