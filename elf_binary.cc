@@ -306,25 +306,23 @@ void ELFBinary::ParsePhdrs() {
 void ELFBinary::ParseEHFrameHeader(size_t off, size_t size) {
     const char* const efh_base = head_ + off;
     int efh_offset = 0;
+    auto efh_read = [efh_base, &efh_offset](auto* p) {
+        memcpy(p, efh_base + efh_offset, sizeof(*p));
+        efh_offset += sizeof(*p);
+    };
 
-    eh_frame_header_.version = *(efh_base + efh_offset);
-    efh_offset += sizeof(eh_frame_header_.version);
-    eh_frame_header_.eh_frame_ptr_enc = *(efh_base + efh_offset);
-    efh_offset += sizeof(eh_frame_header_.eh_frame_ptr_enc);
-    eh_frame_header_.fde_count_enc = *(efh_base + efh_offset);
-    efh_offset += sizeof(eh_frame_header_.fde_count_enc);
-    eh_frame_header_.table_enc = *(efh_base + efh_offset);
-    efh_offset += sizeof(eh_frame_header_.table_enc);
+    efh_read(&eh_frame_header_.version);
+    efh_read(&eh_frame_header_.eh_frame_ptr_enc);
+    efh_read(&eh_frame_header_.fde_count_enc);
+    efh_read(&eh_frame_header_.table_enc);
 
     CHECK(eh_frame_header_.version == 1);
     CHECK(eh_frame_header_.eh_frame_ptr_enc == (DW_EH_PE_sdata4 | DW_EH_PE_pcrel));
     CHECK(eh_frame_header_.fde_count_enc == DW_EH_PE_udata4);
     CHECK(eh_frame_header_.table_enc == (DW_EH_PE_sdata4 | DW_EH_PE_datarel));
 
-    eh_frame_header_.eh_frame_ptr = *reinterpret_cast<const int32_t*>(efh_base + efh_offset);
-    efh_offset += sizeof(eh_frame_header_.eh_frame_ptr);
-    eh_frame_header_.fde_count = *reinterpret_cast<const uint32_t*>(efh_base + efh_offset);
-    efh_offset += sizeof(eh_frame_header_.fde_count);
+    efh_read(&eh_frame_header_.eh_frame_ptr);
+    efh_read(&eh_frame_header_.fde_count);
 
     LOG(INFO) << "ParseEHFrameHeader" << SOLD_LOG_KEY(off) << SOLD_LOG_KEY(size) << SOLD_LOG_8BITS(eh_frame_header_.version)
               << SOLD_LOG_DWEHPE(eh_frame_header_.eh_frame_ptr_enc) << SOLD_LOG_DWEHPE(eh_frame_header_.fde_count_enc)
@@ -334,10 +332,10 @@ void ELFBinary::ParseEHFrameHeader(size_t off, size_t size) {
     CHECK(efh_offset + eh_frame_header_.fde_count * (sizeof(int32_t) * 2) <= size)
         << SOLD_LOG_KEY(efh_offset + eh_frame_header_.fde_count * (sizeof(int32_t) * 2)) << SOLD_LOG_KEY(size);
 
-    for (int i = 0; i < eh_frame_header_.fde_count; i++, efh_offset += sizeof(int32_t) * 2) {
+    for (int i = 0; i < eh_frame_header_.fde_count; i++) {
         EHFrameHeader::FDETableEntry e;
-        e.initial_loc = *reinterpret_cast<const int32_t*>(efh_base + efh_offset);
-        e.fde_ptr = *reinterpret_cast<const int32_t*>(efh_base + efh_offset + sizeof(int32_t));
+        efh_read(&e.initial_loc);
+        efh_read(&e.fde_ptr);
         eh_frame_header_.table.emplace_back(e);
 
         LOG(INFO) << SOLD_LOG_32BITS(e.initial_loc) << SOLD_LOG_32BITS(e.fde_ptr) << SOLD_LOG_32BITS(off + e.fde_ptr)
@@ -351,55 +349,58 @@ void ELFBinary::ParseEHFrameHeader(size_t off, size_t size) {
 
         const char* const fde_base = head_ + OffsetFromAddr(AddrFromOffset(off) + e.fde_ptr);
         int fde_offset = 0;
+        auto fde_read = [fde_base, &fde_offset](auto* p) {
+            memcpy(p, fde_base + fde_offset, sizeof(*p));
+            fde_offset += sizeof(*p);
+        };
 
-        fde.length = *reinterpret_cast<const uint32_t*>(fde_base + fde_offset);
-        fde_offset += sizeof(uint32_t);
+        fde_read(&fde.length);
         if (fde.length == 0xffffffff) {
-            fde.extended_length = *reinterpret_cast<const uint64_t*>(fde_base + fde_offset);
-            fde_offset += sizeof(uint64_t);
+            fde_read(&fde.extended_length);
         }
-        fde.CIE_delta = *reinterpret_cast<const int32_t*>(fde_base + fde_offset);
-        fde_offset += sizeof(int32_t);
+        fde_read(&fde.CIE_delta);
 
         // fde_base + fde_offset - sizeof(int32_t) is the address of fde.CIE_delta.
-        const char* cie_head = head_ + OffsetFromAddr(AddrFromOffset(fde_base + fde_offset - sizeof(int32_t) - head_) - fde.CIE_delta);
+        const char* const cie_base =
+            head_ + OffsetFromAddr(AddrFromOffset(fde_base + fde_offset - sizeof(int32_t) - head_) - fde.CIE_delta);
+        int cie_offset = 0;
+        auto cie_read = [cie_base, &cie_offset](auto* p) {
+            memcpy(p, cie_base + cie_offset, sizeof(*p));
+            cie_offset += sizeof(*p);
+        };
         uint32_t utmp;
         int32_t stmp;
 
-        cie.length = *reinterpret_cast<const uint32_t*>(cie_head);
-        cie_head += sizeof(uint32_t);
-        cie.CIE_id = *reinterpret_cast<const int32_t*>(cie_head);
-        cie_head += sizeof(int32_t);
-        cie.version = *reinterpret_cast<const uint8_t*>(cie_head);
-        cie_head += sizeof(uint8_t);
-        cie.aug_str = cie_head;
-        while (*cie_head != '\0') cie_head++;
-        cie_head++;
-        cie_head = read_uleb128(cie_head, &utmp);  // Skip code alignment factor
-        cie_head = read_sleb128(cie_head, &stmp);  // Skip data alignment factor
+        cie_read(&cie.length);
+        cie_read(&cie.CIE_id);
+        cie_read(&cie.version);
+        cie.aug_str = cie_base + cie_offset;
+        while (*(cie_base + cie_offset) != '\0') cie_offset++;
+        cie_offset++;
+        cie_offset = read_uleb128(reinterpret_cast<const char*>(cie_base + cie_offset), &utmp) - cie_base;  // Skip code alignment factor
+        cie_offset = read_sleb128(reinterpret_cast<const char*>(cie_base + cie_offset), &stmp) - cie_base;  // Skip data alignment factor
+        cie_offset = read_uleb128(reinterpret_cast<const char*>(cie_base + cie_offset), &utmp) - cie_base;  // Skip augmentation factor
 
         const char* aug_head = cie.aug_str;
-        cie_head = read_uleb128(cie_head, &utmp);  // Skip augmentation length.
-
         if (*aug_head == 'z') {
             aug_head++;
-            cie_head++;
-            LOG(INFO) << SOLD_LOG_8BITS(*cie_head) << SOLD_LOG_KEY(*aug_head);
+            cie_offset++;
+
+            LOG(INFO) << SOLD_LOG_8BITS(*(cie_base + cie_offset)) << SOLD_LOG_KEY(*aug_head);
 
             // Copy from sysdeps/generic/unwind-dw2-fde.c in glibc
             while (1) {
                 if (*aug_head == 'R') {
-                    cie.FDE_encoding = *cie_head;
-                    cie_head++;
+                    cie_read(&cie.FDE_encoding);
                 } else if (*aug_head == 'P') {
                     /* Personality encoding and pointer.  */
                     /* ??? Avoid dereferencing indirect pointers, since we're
                        faking the base address.  Gotta keep DW_EH_PE_aligned
                        intact, however.  */
-                    cie_head = read_encoded_value_with_base(*cie_head & 0x7F, 0, cie_head + 1, &utmp);
+                    cie_offset =
+                        read_encoded_value_with_base(*(cie_base + cie_offset) & 0x7F, 0, cie_base + cie_offset + 1, &utmp) - cie_base;
                 } else if (*aug_head == 'L') {
-                    cie.LSDA_encoding = *cie_head;
-                    cie_head++;
+                    cie_read(&cie.LSDA_encoding);
                 } else {
                     if (*aug_head != '\0') {
                         LOG(WARNING) << "unknown augmentation" << SOLD_LOG_KEY(*aug_head) << SOLD_LOG_8BITS(*aug_head);
@@ -410,8 +411,7 @@ void ELFBinary::ParseEHFrameHeader(size_t off, size_t size) {
             }
         }
 
-        fde.initial_loc = *reinterpret_cast<const int32_t*>(fde_base + fde_offset);
-        fde_offset += sizeof(int32_t);
+        fde_read(&fde.initial_loc);
 
         LOG(INFO) << "ParseEHFrameHeader table[" << i << "] = {" << SOLD_LOG_32BITS(e.initial_loc) << SOLD_LOG_32BITS(e.fde_ptr)
                   << "} FDE = {" << SOLD_LOG_32BITS(fde.length) << SOLD_LOG_64BITS(fde.extended_length) << SOLD_LOG_32BITS(fde.CIE_delta)
