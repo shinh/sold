@@ -36,6 +36,8 @@ private:
         if (tls_.memsz) num_phdrs += 2;
         // PT_GNU_EH_FRAME and its PT_LOAD
         num_phdrs += 2;
+        // GNU_STACK
+        num_phdrs++;
         for (ELFBinary* bin : link_binaries_) {
             num_phdrs += bin->loads().size();
         }
