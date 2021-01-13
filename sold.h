@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "ehframe_builder.h"
 #include "elf_binary.h"
 #include "hash.h"
 #include "ldsoconf.h"
@@ -94,6 +95,17 @@ private:
     void BuildEhdr();
 
     void BuildLoads();
+
+    void BuildEHFrameHeader() {
+        for (const ELFBinary* bin : link_binaries_) {
+            for (const Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_GNU_EH_FRAME) {
+                    ehframe_builder_.Add(bin->name(), *bin->eh_frame_header(), bin->AddrFromOffset(phdr->p_offset), offsets_[bin],
+                                         ehframe_offset_);
+                }
+            }
+        }
+    }
 
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
         Elf_Dyn dyn;
@@ -313,6 +325,7 @@ private:
     std::vector<Elf_Rel> rels_;
     StrtabBuilder strtab_;
     VersionBuilder version_;
+    EHFrameBuilder ehframe_builder_;
     ShdrBuilder shdr_;
     Elf_Ehdr ehdr_;
     std::vector<Load> loads_;

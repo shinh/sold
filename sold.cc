@@ -42,6 +42,7 @@ void Sold::Link(const std::string& out_filename) {
     }
     BuildArrays();
     BuildDynamic();
+    BuildEHFrameHeader();
 
     strtab_.Freeze();
     BuildLoads();

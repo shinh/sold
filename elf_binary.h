@@ -33,6 +33,7 @@ public:
     size_t num_rels() const { return num_rels_; }
     const Elf_Rel* plt_rel() const { return plt_rel_; }
     size_t num_plt_rels() const { return num_plt_rels_; }
+    const EHFrameHeader* eh_frame_header() const { return &eh_frame_header_; }
 
     const char* head() const { return head_; }
     size_t size() const { return size_; }
