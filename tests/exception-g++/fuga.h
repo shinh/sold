@@ -2,5 +2,5 @@
 #include <iostream>
 #include <stdexcept>
 
-void throw_exception();
-void catch_exception();
+void throw_exception_fuga();
+void catch_exception_fuga();
