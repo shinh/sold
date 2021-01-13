@@ -324,7 +324,7 @@ private:
     std::vector<std::string> exclude_sos_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
-    std::map<ELFBinary*, uintptr_t> offsets_;
+    std::map<const ELFBinary*, uintptr_t> offsets_;
     std::map<std::string, std::string> filename_to_soname_;
     std::map<std::string, std::string> soname_to_filename_;
     uintptr_t tls_file_offset_{0};
