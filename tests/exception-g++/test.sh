@@ -10,4 +10,4 @@ ln -sf libhoge.so.soldout libhoge.so
 # Use original
 # ln -sf libhoge.so.original libhoge.so
 
-./main
+LD_LIBRARY_PATH=. ./main
