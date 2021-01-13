@@ -26,8 +26,8 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
 }
 
 void Sold::Link(const std::string& out_filename) {
-    DecideOffsets();
     CollectTLS();
+    DecideOffsets();
     CollectArrays();
     CollectSymbols();
     CopyPublicSymbols();
@@ -302,6 +302,8 @@ void Sold::DecideOffsets() {
         offset = range.end;
     }
     tls_offset_ = offset;
+    offset = AlignNext(offset + tls_.memsz);
+    ehframe_offset_ = offset;
 }
 
 void Sold::CollectTLS() {
