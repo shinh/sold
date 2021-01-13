@@ -87,6 +87,7 @@ void Sold::Emit(const std::string& out_filename) {
 
     EmitCode(fp);
     EmitTLS(fp);
+    EmitEHFrame(fp);
 
     if (emit_section_header_) EmitShdr(fp);
 
@@ -130,6 +131,8 @@ void Sold::BuildLoads() {
         }
     }
     tls_file_offset_ = file_offset;
+    file_offset = AlignNext(file_offset + tls_.filesz);
+    ehframe_file_offset_ = file_offset;
 }
 
 void Sold::BuildArrays() {
@@ -254,6 +257,21 @@ void Sold::EmitPhdrs(FILE* fp) {
         phdr.p_memsz = tls_.memsz;
         phdr.p_align = 0x1000;
         phdr.p_type = PT_TLS;
+        phdr.p_flags = PF_R;
+        phdrs.push_back(phdr);
+        phdr.p_type = PT_LOAD;
+        phdr.p_flags = PF_R | PF_W;
+        phdrs.push_back(phdr);
+    }
+    {
+        Elf_Phdr phdr;
+        phdr.p_offset = ehframe_file_offset_;
+        phdr.p_vaddr = ehframe_offset_;
+        phdr.p_paddr = ehframe_offset_;
+        phdr.p_filesz = ehframe_builder_.Size();
+        phdr.p_memsz = ehframe_builder_.Size();
+        phdr.p_align = 0x1000;
+        phdr.p_type = PT_GNU_EH_FRAME;
         phdr.p_flags = PF_R;
         phdrs.push_back(phdr);
         phdr.p_type = PT_LOAD;

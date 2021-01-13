@@ -34,6 +34,8 @@ private:
         if (is_executable_) num_phdrs += 2;
         // TLS and its LOAD.
         if (tls_.memsz) num_phdrs += 2;
+        // PT_GNU_EH_FRAME and its PT_LOAD
+        num_phdrs += 2;
         for (ELFBinary* bin : link_binaries_) {
             num_phdrs += bin->loads().size();
         }
@@ -90,7 +92,11 @@ private:
         return s;
     }
 
-    uintptr_t ShdrOffset() const { return TLSOffset() + TLSSize(); }
+    uintptr_t EHFrameOffset() const { return TLSOffset() + TLSSize(); }
+    // We emit EHFrame whenever the number of FDEs is 0.
+    uintptr_t EHFrameSize() const { return ehframe_builder_.Size(); }
+
+    uintptr_t ShdrOffset() const { return EHFrameOffset() + EHFrameSize(); }
 
     void BuildEhdr();
 
@@ -194,15 +200,21 @@ private:
 
     // Emit TLS initialization image
     void EmitTLS(FILE* fp) {
-        EmitPad(fp, tls_file_offset_);
+        EmitPad(fp, TLSOffset());
         CHECK(ftell(fp) == TLSOffset());
         for (TLS::Data data : tls_.data) {
             WriteBuf(fp, data.start, data.size);
         }
     }
 
+    void EmitEHFrame(FILE* fp) {
+        CHECK(ftell(fp) == EHFrameOffset());
+        LOG(INFO) << SOLD_LOG_BITS(ftell(fp)) << SOLD_LOG_BITS(EHFrameOffset()) << SOLD_LOG_BITS(ehframe_builder_.Size());
+        ehframe_builder_.Emit(fp);
+    }
+
     void EmitShdr(FILE* fp) {
-        CHECK(ftell(fp) == ShdrOffset());
+        SOLD_CHECK_EQ(ftell(fp), ShdrOffset());
         shdr_.EmitShdrs(fp);
     }
 
@@ -316,7 +328,9 @@ private:
     std::map<std::string, std::string> filename_to_soname_;
     std::map<std::string, std::string> soname_to_filename_;
     uintptr_t tls_file_offset_{0};
+    uintptr_t ehframe_file_offset_{0};
     uintptr_t tls_offset_{0};
+    uintptr_t ehframe_offset_{0};
     bool is_executable_{false};
     bool emit_section_header_;
 
