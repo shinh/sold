@@ -102,6 +102,41 @@ struct TLS {
     Elf_Xword align{0};
 };
 
+struct EHFrameHeader {
+    struct FDETableEntry {
+        int32_t initial_loc;
+        int32_t fde_ptr;
+    };
+
+    struct CIE {
+        uint32_t length;
+        int32_t CIE_id;
+        uint8_t version;
+        const char* aug_str;
+        uint8_t FDE_encoding;
+        uint8_t LSDA_encoding;
+    };
+
+    struct FDE {
+        uint32_t length;
+        uint64_t extended_length;
+        int32_t CIE_delta;
+        int32_t initial_loc;
+    };
+
+    uint8_t version;
+    uint8_t eh_frame_ptr_enc;
+    uint8_t fde_count_enc;
+    uint8_t table_enc;
+
+    int32_t eh_frame_ptr;
+    uint32_t fde_count;
+
+    std::vector<FDETableEntry> table;
+    std::vector<FDE> fdes;
+    std::vector<CIE> cies;
+};
+
 bool is_special_ver_ndx(Elf64_Versym v);
 
 std::string special_ver_ndx_to_str(Elf_Versym v);
