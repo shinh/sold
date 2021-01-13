@@ -18,7 +18,9 @@
 #define SOLD_LOG_32BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 8))
 #define SOLD_LOG_16BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 4))
 #define SOLD_LOG_8BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 2))
+#define SOLD_LOG_BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key))
 #define SOLD_LOG_DWEHPE(type) SOLD_LOG_KEY_VALUE(#type, ShowDW_EH_PE(type))
+#define SOLD_CHECK_EQ(a, b) CHECK(a == b) << SOLD_LOG_BITS(a) << SOLD_LOG_BITS(b)
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
