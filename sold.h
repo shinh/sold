@@ -24,31 +24,6 @@ public:
     const std::map<std::string, std::string> filename_to_soname() { return filename_to_soname_; };
 
 private:
-    template <class T>
-    void Write(FILE* fp, const T& v) {
-        CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
-    }
-
-    void WriteBuf(FILE* fp, const void* buf, size_t size) { CHECK(fwrite(buf, 1, size, fp) == size); }
-
-    void EmitZeros(FILE* fp, uintptr_t cnt) {
-        std::string zero(cnt, '\0');
-        WriteBuf(fp, zero.data(), zero.size());
-    }
-
-    void EmitPad(FILE* fp, uintptr_t to) {
-        uint pos = ftell(fp);
-        CHECK(pos >= 0);
-        CHECK(pos <= to);
-        EmitZeros(fp, to - pos);
-    }
-
-    void EmitAlign(FILE* fp) {
-        long pos = ftell(fp);
-        CHECK(pos >= 0);
-        EmitZeros(fp, AlignNext(pos) - pos);
-    }
-
     void Emit(const std::string& out_filename);
 
     size_t CountPhdrs() const {

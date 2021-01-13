@@ -60,7 +60,15 @@ std::vector<std::string> SplitString(const std::string& str, const std::string& 
 
 bool HasPrefix(const std::string& str, const std::string& prefix);
 
+template <class T>
+void Write(FILE* fp, const T& v) {
+    CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
+}
 uintptr_t AlignNext(uintptr_t a, uintptr_t mask = 4095);
+void WriteBuf(FILE* fp, const void* buf, size_t size);
+void EmitZeros(FILE* fp, uintptr_t cnt);
+void EmitPad(FILE* fp, uintptr_t to);
+void EmitAlign(FILE* fp);
 
 struct Range {
     uintptr_t start;
