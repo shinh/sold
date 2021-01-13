@@ -39,6 +39,70 @@ std::ostream& operator<<(std::ostream& os, const Syminfo& s) {
     return os;
 }
 
+std::string ShowDW_EH_PE(uint8_t type) {
+    if (type == DW_EH_PE_omit) {
+        return "DW_EH_PE_omit";
+    }
+
+    std::string ret;
+
+    switch (type & 0xf) {
+        case DW_EH_PE_absptr:
+            ret = "DW_EH_PE_absptr";
+            break;
+        case DW_EH_PE_uleb128:
+            ret = "DW_EH_PE_uleb128";
+            break;
+        case DW_EH_PE_udata2:
+            ret = "DW_EH_PE_udata2";
+            break;
+        case DW_EH_PE_udata4:
+            ret = "DW_EH_PE_udata4";
+            break;
+        case DW_EH_PE_udata8:
+            ret = "DW_EH_PE_udata8";
+            break;
+        case DW_EH_PE_sleb128:
+            ret = "DW_EH_PE_sleb128";
+            break;
+        case DW_EH_PE_sdata2:
+            ret = "DW_EH_PE_sdata2";
+            break;
+        case DW_EH_PE_sdata4:
+            ret = "DW_EH_PE_sdata4";
+            break;
+        case DW_EH_PE_sdata8:
+            ret = "DW_EH_PE_sdata8";
+            break;
+    }
+
+    switch (type & 0xf0) {
+        case DW_EH_PE_pcrel:
+            ret += " + DW_EH_PE_pcrel";
+            break;
+        case DW_EH_PE_textrel:
+            ret += " + DW_EH_PE_textrel";
+            break;
+        case DW_EH_PE_datarel:
+            ret += " + DW_EH_PE_datarel";
+            break;
+        case DW_EH_PE_funcrel:
+            ret += " + DW_EH_PE_funcrel";
+            break;
+        case DW_EH_PE_aligned:
+            ret += " + DW_EH_PE_aligned";
+            break;
+    }
+
+    if (type == DW_EH_PE_SOLD_DUMMY) {
+        ret = "DW_EH_PE_SOLD_DUMMY(0xEE)";
+    } else if (ret == "") {
+        ret = HexString(type, 2);
+    }
+
+    return ret;
+}
+
 std::string ShowRelocationType(int type) {
     switch (type) {
         case R_X86_64_NONE:
@@ -151,4 +215,122 @@ std::string special_ver_ndx_to_str(Elf64_Versym versym) {
         LOG(FATAL) << "This versym (= " << versym << ") is not special.";
         exit(1);
     }
+}
+
+// Copy from sysdeps/generic/unwind-pe.h in glibc
+const char* read_uleb128(const char* p, uint32_t* val) {
+    unsigned int shift = 0;
+    unsigned char byte;
+    uint32_t result;
+
+    result = 0;
+    do {
+        byte = *p++;
+        result |= (byte & 0x7f) << shift;
+        shift += 7;
+    } while (byte & 0x80);
+
+    *val = result;
+    return p;
+}
+
+// Copy from sysdeps/generic/unwind-pe.h in glibc
+const char* read_sleb128(const char* p, int32_t* val) {
+    unsigned int shift = 0;
+    unsigned char byte;
+    int32_t result;
+
+    result = 0;
+    do {
+        byte = *p++;
+        result |= (byte & 0x7f) << shift;
+        shift += 7;
+    } while (byte & 0x80);
+
+    /* Sign-extend a negative value.  */
+    if (shift < 8 * sizeof(result) && (byte & 0x40) != 0) result |= -(1L << shift);
+
+    *val = (int32_t)result;
+    return p;
+}
+
+// Copy from sysdeps/generic/unwind-pe.h in glibc
+typedef unsigned sold_Unwind_Internal_Ptr __attribute__((__mode__(__pointer__)));
+#define DW_EH_PE_indirect 0x80
+
+const char* read_encoded_value_with_base(unsigned char encoding, sold_Unwind_Ptr base, const char* p, uint32_t* val) {
+    union unaligned {
+        void* ptr;
+        unsigned u2 __attribute__((mode(HI)));
+        unsigned u4 __attribute__((mode(SI)));
+        unsigned u8 __attribute__((mode(DI)));
+        signed s2 __attribute__((mode(HI)));
+        signed s4 __attribute__((mode(SI)));
+        signed s8 __attribute__((mode(DI)));
+    } __attribute__((__packed__));
+
+    union unaligned* u = (union unaligned*)p;
+    sold_Unwind_Internal_Ptr result;
+
+    if (encoding == DW_EH_PE_aligned) {
+        sold_Unwind_Internal_Ptr a = (sold_Unwind_Internal_Ptr)p;
+        a = (a + sizeof(void*) - 1) & -sizeof(void*);
+        result = *(sold_Unwind_Internal_Ptr*)a;
+        p = (char*)(a + sizeof(void*));
+    } else {
+        switch (encoding & 0x0f) {
+            case DW_EH_PE_absptr:
+                result = (sold_Unwind_Internal_Ptr)u->ptr;
+                p += sizeof(void*);
+                break;
+
+            case DW_EH_PE_uleb128: {
+                uint32_t tmp;
+                p = read_uleb128(p, &tmp);
+                result = (sold_Unwind_Internal_Ptr)tmp;
+            } break;
+
+            case DW_EH_PE_sleb128: {
+                int32_t tmp;
+                p = read_sleb128(p, &tmp);
+                result = (sold_Unwind_Internal_Ptr)tmp;
+            } break;
+
+            case DW_EH_PE_udata2:
+                result = u->u2;
+                p += 2;
+                break;
+            case DW_EH_PE_udata4:
+                result = u->u4;
+                p += 4;
+                break;
+            case DW_EH_PE_udata8:
+                result = u->u8;
+                p += 8;
+                break;
+
+            case DW_EH_PE_sdata2:
+                result = u->s2;
+                p += 2;
+                break;
+            case DW_EH_PE_sdata4:
+                result = u->s4;
+                p += 4;
+                break;
+            case DW_EH_PE_sdata8:
+                result = u->s8;
+                p += 8;
+                break;
+            default:
+                LOG(FATAL) << SOLD_LOG_8BITS(encoding & 0x0f);
+        }
+
+        if (result != 0) {
+            result += ((encoding & 0x70) == DW_EH_PE_pcrel ? (sold_Unwind_Internal_Ptr)u : base);
+            if (encoding & DW_EH_PE_indirect) result = *(sold_Unwind_Internal_Ptr*)result;
+        }
+    }
+
+    *val = result;
+    return p;
 }

@@ -8,6 +8,41 @@
 #include <map>
 #include <memory>
 
+struct EHFrameHeader {
+    struct FDETableEntry {
+        int32_t initial_loc;
+        int32_t fde_ptr;
+    };
+
+    struct CIE {
+        uint32_t length;
+        int32_t CIE_id;
+        uint8_t version;
+        const char* aug_str;
+        uint8_t FDE_encoding;
+        uint8_t LSDA_encoding;
+    };
+
+    struct FDE {
+        uint32_t length;
+        uint64_t extended_length;
+        int32_t CIE_delta;
+        int32_t initial_loc;
+    };
+
+    uint8_t version;
+    uint8_t eh_frame_ptr_enc;
+    uint8_t fde_count_enc;
+    uint8_t table_enc;
+
+    int32_t eh_frame_ptr;
+    uint32_t fde_count;
+
+    std::vector<FDETableEntry> table;
+    std::vector<FDE> fdes;
+    std::vector<CIE> cies;
+};
+
 class ELFBinary {
 public:
     ELFBinary(const std::string& filename, int fd, char* head, size_t size);
@@ -67,12 +102,10 @@ public:
     void PrintVersyms();
 
     std::string ShowDynSymtab();
-
     std::string ShowDtRela();
-
     std::string ShowVersion();
-
     std::string ShowTLS();
+    std::string ShowEHFrame();
 
     std::pair<std::string, std::string> GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname);
 
@@ -81,9 +114,8 @@ public:
 
 private:
     void ParsePhdrs();
-
+    void ParseEHFrameHeader(size_t off, size_t size);
     void ParseDynamic(size_t off, size_t size);
-
     void ParseFuncArray(uintptr_t* array, uintptr_t size, std::vector<uintptr_t>* out);
 
     const std::string filename_;
@@ -97,6 +129,8 @@ private:
     Elf_Phdr* tls_{nullptr};
     const char* strtab_{nullptr};
     Elf_Sym* symtab_{nullptr};
+
+    EHFrameHeader eh_frame_header_;
 
     std::vector<std::string> neededs_;
     // This is the name specified in the DT_SONAME field.

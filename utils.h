@@ -1,6 +1,7 @@
 #pragma once
 
 #include <elf.h>
+#include <libdwarf/dwarf.h>
 
 #include <cassert>
 #include <iomanip>
@@ -16,6 +17,8 @@
 #define SOLD_LOG_64BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 16))
 #define SOLD_LOG_32BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 8))
 #define SOLD_LOG_16BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 4))
+#define SOLD_LOG_8BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 2))
+#define SOLD_LOG_DWEHPE(type) SOLD_LOG_KEY_VALUE(#type, ShowDW_EH_PE(type))
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
@@ -39,6 +42,9 @@
 #define ELF_R_SYM(val) ELF64_R_SYM(val)
 #define ELF_R_TYPE(val) ELF64_R_TYPE(val)
 #define ELF_R_INFO(sym, type) ELF64_R_INFO(sym, type)
+
+// 0xee is never used as a valid DWARF Exception Header value
+#define DW_EH_PE_SOLD_DUMMY 0xee
 
 // Although there is no description of VERSYM_HIDDEN in glibc, you can find it
 // in binutils source code.
@@ -76,6 +82,7 @@ struct Syminfo {
 };
 
 std::string ShowRelocationType(int type);
+std::string ShowDW_EH_PE(uint8_t type);
 std::ostream& operator<<(std::ostream& os, const Syminfo& s);
 std::ostream& operator<<(std::ostream& os, const Elf_Rel& s);
 
@@ -100,22 +107,17 @@ bool is_special_ver_ndx(Elf64_Versym v);
 std::string special_ver_ndx_to_str(Elf_Versym v);
 
 template <class T>
-inline std::string HexString(T num, int length = 16) {
+inline std::string HexString(T num, int length = -1) {
+    if (length == -1) {
+        length = sizeof(T) * 2;
+    }
     std::stringstream ss;
-    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << num;
+    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << +num;
     return ss.str();
 }
 
-template <>
-inline std::string HexString<char*>(char* num, int length) {
-    std::stringstream ss;
-    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << reinterpret_cast<uint64_t>(num);
-    return ss.str();
-}
+const char* read_uleb128(const char* p, uint32_t* val);
+const char* read_sleb128(const char* p, int32_t* val);
 
-template <>
-inline std::string HexString<const char*>(const char* num, int length) {
-    std::stringstream ss;
-    ss << "0x" << std::uppercase << std::setfill('0') << std::setw(length) << std::hex << reinterpret_cast<const uint64_t>(num);
-    return ss.str();
-}
+typedef unsigned sold_Unwind_Ptr __attribute__((__mode__(__word__)));
+const char* read_encoded_value_with_base(unsigned char encoding, sold_Unwind_Ptr base, const char* p, uint32_t* val);
