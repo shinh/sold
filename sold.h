@@ -106,6 +106,9 @@ private:
         for (const ELFBinary* bin : link_binaries_) {
             for (const Elf_Phdr* phdr : bin->phdrs()) {
                 if (phdr->p_type == PT_GNU_EH_FRAME) {
+                    // The order of calls of ehframe_builder_.Add is important
+                    // because the entries in the table must be sorted by the
+                    // initial location value.
                     ehframe_builder_.Add(bin->name(), *bin->eh_frame_header(), bin->AddrFromOffset(phdr->p_offset), offsets_[bin],
                                          ehframe_offset_);
                 }

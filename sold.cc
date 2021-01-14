@@ -27,6 +27,8 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
 
 void Sold::Link(const std::string& out_filename) {
     CollectTLS();
+    // We must call DecideOffsets() after CollectTLS() because offsets depend
+    // on the size of TLS template image.
     DecideOffsets();
     CollectArrays();
     CollectSymbols();
