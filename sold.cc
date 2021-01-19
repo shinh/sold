@@ -280,6 +280,23 @@ void Sold::EmitPhdrs(FILE* fp) {
         phdr.p_flags = PF_R | PF_W;
         phdrs.push_back(phdr);
     }
+    {
+        Elf_Phdr phdr;
+        phdr.p_offset = 0;
+        phdr.p_vaddr = 0;
+        phdr.p_paddr = 0;
+        phdr.p_filesz = 0;
+        phdr.p_memsz = 0;
+        phdr.p_align = 0x10;  // TODO(akawashiro) Is it appropriate?
+        phdr.p_type = PT_GNU_STACK;
+        phdr.p_flags = PF_R | PF_W;
+        for (ELFBinary* bin : link_binaries_) {
+            if (bin->gnu_stack() != NULL) {
+                phdr.p_flags |= bin->gnu_stack()->p_flags;
+            }
+        }
+        phdrs.push_back(phdr);
+    }
 
     CHECK(phdrs.size() == CountPhdrs());
     for (const Elf_Phdr& phdr : phdrs) {

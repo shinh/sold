@@ -298,6 +298,8 @@ void ELFBinary::ParsePhdrs() {
             LOG(INFO) << "Found PT_INTERP.";
         } else if (phdr->p_type == PT_GNU_EH_FRAME) {
             ParseEHFrameHeader(phdr->p_offset, phdr->p_filesz);
+        } else if (phdr->p_type == PT_GNU_STACK) {
+            gnu_stack_ = phdr;
         }
     }
     CHECK(!phdrs_.empty());

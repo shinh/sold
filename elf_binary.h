@@ -22,6 +22,7 @@ public:
     const std::vector<Elf_Phdr*> phdrs() const { return phdrs_; }
     const std::vector<Elf_Phdr*> loads() const { return loads_; }
     const Elf_Phdr* tls() const { return tls_; }
+    const Elf_Phdr* gnu_stack() const { return gnu_stack_; }
 
     const std::vector<std::string>& neededs() const { return neededs_; }
     const std::string& soname() const { return soname_; }
@@ -93,6 +94,7 @@ private:
     std::vector<Elf_Phdr*> phdrs_;
     std::vector<Elf_Phdr*> loads_;
     Elf_Phdr* tls_{nullptr};
+    Elf_Phdr* gnu_stack_{nullptr};
     const char* strtab_{nullptr};
     Elf_Sym* symtab_{nullptr};
 
