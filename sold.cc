@@ -26,8 +26,10 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
 }
 
 void Sold::Link(const std::string& out_filename) {
-    DecideOffsets();
     CollectTLS();
+    // We must call DecideOffsets() after CollectTLS() because offsets depend
+    // on the size of TLS template image.
+    DecideOffsets();
     CollectArrays();
     CollectSymbols();
     CopyPublicSymbols();
@@ -42,6 +44,7 @@ void Sold::Link(const std::string& out_filename) {
     }
     BuildArrays();
     BuildDynamic();
+    BuildEHFrameHeader();
 
     strtab_.Freeze();
     BuildLoads();
@@ -86,6 +89,7 @@ void Sold::Emit(const std::string& out_filename) {
 
     EmitCode(fp);
     EmitTLS(fp);
+    EmitEHFrame(fp);
 
     if (emit_section_header_) EmitShdr(fp);
 
@@ -129,6 +133,8 @@ void Sold::BuildLoads() {
         }
     }
     tls_file_offset_ = file_offset;
+    file_offset = AlignNext(file_offset + tls_.filesz);
+    ehframe_file_offset_ = file_offset;
 }
 
 void Sold::BuildArrays() {
@@ -259,6 +265,21 @@ void Sold::EmitPhdrs(FILE* fp) {
         phdr.p_flags = PF_R | PF_W;
         phdrs.push_back(phdr);
     }
+    {
+        Elf_Phdr phdr;
+        phdr.p_offset = ehframe_file_offset_;
+        phdr.p_vaddr = ehframe_offset_;
+        phdr.p_paddr = ehframe_offset_;
+        phdr.p_filesz = ehframe_builder_.Size();
+        phdr.p_memsz = ehframe_builder_.Size();
+        phdr.p_align = 0x1000;
+        phdr.p_type = PT_GNU_EH_FRAME;
+        phdr.p_flags = PF_R;
+        phdrs.push_back(phdr);
+        phdr.p_type = PT_LOAD;
+        phdr.p_flags = PF_R | PF_W;
+        phdrs.push_back(phdr);
+    }
 
     CHECK(phdrs.size() == CountPhdrs());
     for (const Elf_Phdr& phdr : phdrs) {
@@ -302,6 +323,8 @@ void Sold::DecideOffsets() {
         offset = range.end;
     }
     tls_offset_ = offset;
+    offset = AlignNext(offset + tls_.memsz);
+    ehframe_offset_ = offset;
 }
 
 void Sold::CollectTLS() {

@@ -23,6 +23,28 @@ uintptr_t AlignNext(uintptr_t a, uintptr_t mask) {
     return (a + mask) & ~mask;
 }
 
+void WriteBuf(FILE* fp, const void* buf, size_t size) {
+    CHECK(fwrite(buf, 1, size, fp) == size);
+}
+
+void EmitZeros(FILE* fp, uintptr_t cnt) {
+    std::string zero(cnt, '\0');
+    WriteBuf(fp, zero.data(), zero.size());
+}
+
+void EmitPad(FILE* fp, uintptr_t to) {
+    uint pos = ftell(fp);
+    CHECK(pos >= 0);
+    CHECK(pos <= to);
+    EmitZeros(fp, to - pos);
+}
+
+void EmitAlign(FILE* fp) {
+    long pos = ftell(fp);
+    CHECK(pos >= 0);
+    EmitZeros(fp, AlignNext(pos) - pos);
+}
+
 bool IsTLS(const Elf_Sym& sym) {
     return ELF_ST_TYPE(sym.st_info) == STT_TLS;
 }

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "ehframe_builder.h"
 #include "elf_binary.h"
 #include "hash.h"
 #include "ldsoconf.h"
@@ -24,31 +25,6 @@ public:
     const std::map<std::string, std::string> filename_to_soname() { return filename_to_soname_; };
 
 private:
-    template <class T>
-    void Write(FILE* fp, const T& v) {
-        CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
-    }
-
-    void WriteBuf(FILE* fp, const void* buf, size_t size) { CHECK(fwrite(buf, 1, size, fp) == size); }
-
-    void EmitZeros(FILE* fp, uintptr_t cnt) {
-        std::string zero(cnt, '\0');
-        WriteBuf(fp, zero.data(), zero.size());
-    }
-
-    void EmitPad(FILE* fp, uintptr_t to) {
-        uint pos = ftell(fp);
-        CHECK(pos >= 0);
-        CHECK(pos <= to);
-        EmitZeros(fp, to - pos);
-    }
-
-    void EmitAlign(FILE* fp) {
-        long pos = ftell(fp);
-        CHECK(pos >= 0);
-        EmitZeros(fp, AlignNext(pos) - pos);
-    }
-
     void Emit(const std::string& out_filename);
 
     size_t CountPhdrs() const {
@@ -58,6 +34,8 @@ private:
         if (is_executable_) num_phdrs += 2;
         // TLS and its LOAD.
         if (tls_.memsz) num_phdrs += 2;
+        // PT_GNU_EH_FRAME and its PT_LOAD
+        num_phdrs += 2;
         for (ELFBinary* bin : link_binaries_) {
             num_phdrs += bin->loads().size();
         }
@@ -114,11 +92,29 @@ private:
         return s;
     }
 
-    uintptr_t ShdrOffset() const { return TLSOffset() + TLSSize(); }
+    uintptr_t EHFrameOffset() const { return TLSOffset() + TLSSize(); }
+    // We emit EHFrame whenever the number of FDEs is 0.
+    uintptr_t EHFrameSize() const { return ehframe_builder_.Size(); }
+
+    uintptr_t ShdrOffset() const { return EHFrameOffset() + EHFrameSize(); }
 
     void BuildEhdr();
 
     void BuildLoads();
+
+    void BuildEHFrameHeader() {
+        for (const ELFBinary* bin : link_binaries_) {
+            for (const Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_GNU_EH_FRAME) {
+                    // The order of calls of ehframe_builder_.Add is important
+                    // because the entries in the table must be sorted by the
+                    // initial location value.
+                    ehframe_builder_.Add(bin->name(), *bin->eh_frame_header(), bin->AddrFromOffset(phdr->p_offset), offsets_[bin],
+                                         ehframe_offset_);
+                }
+            }
+        }
+    }
 
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
         Elf_Dyn dyn;
@@ -207,15 +203,21 @@ private:
 
     // Emit TLS initialization image
     void EmitTLS(FILE* fp) {
-        EmitPad(fp, tls_file_offset_);
+        EmitPad(fp, TLSOffset());
         CHECK(ftell(fp) == TLSOffset());
         for (TLS::Data data : tls_.data) {
             WriteBuf(fp, data.start, data.size);
         }
     }
 
+    void EmitEHFrame(FILE* fp) {
+        CHECK(ftell(fp) == EHFrameOffset());
+        LOG(INFO) << SOLD_LOG_BITS(ftell(fp)) << SOLD_LOG_BITS(EHFrameOffset()) << SOLD_LOG_BITS(ehframe_builder_.Size());
+        ehframe_builder_.Emit(fp);
+    }
+
     void EmitShdr(FILE* fp) {
-        CHECK(ftell(fp) == ShdrOffset());
+        SOLD_CHECK_EQ(ftell(fp), ShdrOffset());
         shdr_.EmitShdrs(fp);
     }
 
@@ -325,11 +327,13 @@ private:
     std::vector<std::string> exclude_sos_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
-    std::map<ELFBinary*, uintptr_t> offsets_;
+    std::map<const ELFBinary*, uintptr_t> offsets_;
     std::map<std::string, std::string> filename_to_soname_;
     std::map<std::string, std::string> soname_to_filename_;
     uintptr_t tls_file_offset_{0};
+    uintptr_t ehframe_file_offset_{0};
     uintptr_t tls_offset_{0};
+    uintptr_t ehframe_offset_{0};
     bool is_executable_{false};
     bool emit_section_header_;
 
@@ -338,6 +342,7 @@ private:
     std::vector<Elf_Rel> rels_;
     StrtabBuilder strtab_;
     VersionBuilder version_;
+    EHFrameBuilder ehframe_builder_;
     ShdrBuilder shdr_;
     Elf_Ehdr ehdr_;
     std::vector<Load> loads_;

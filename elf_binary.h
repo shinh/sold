@@ -8,41 +8,6 @@
 #include <map>
 #include <memory>
 
-struct EHFrameHeader {
-    struct FDETableEntry {
-        int32_t initial_loc;
-        int32_t fde_ptr;
-    };
-
-    struct CIE {
-        uint32_t length;
-        int32_t CIE_id;
-        uint8_t version;
-        const char* aug_str;
-        uint8_t FDE_encoding;
-        uint8_t LSDA_encoding;
-    };
-
-    struct FDE {
-        uint32_t length;
-        uint64_t extended_length;
-        int32_t CIE_delta;
-        int32_t initial_loc;
-    };
-
-    uint8_t version;
-    uint8_t eh_frame_ptr_enc;
-    uint8_t fde_count_enc;
-    uint8_t table_enc;
-
-    int32_t eh_frame_ptr;
-    uint32_t fde_count;
-
-    std::vector<FDETableEntry> table;
-    std::vector<FDE> fdes;
-    std::vector<CIE> cies;
-};
-
 class ELFBinary {
 public:
     ELFBinary(const std::string& filename, int fd, char* head, size_t size);
@@ -68,6 +33,7 @@ public:
     size_t num_rels() const { return num_rels_; }
     const Elf_Rel* plt_rel() const { return plt_rel_; }
     size_t num_plt_rels() const { return num_plt_rels_; }
+    const EHFrameHeader* eh_frame_header() const { return &eh_frame_header_; }
 
     const char* head() const { return head_; }
     size_t size() const { return size_; }
@@ -109,8 +75,8 @@ public:
 
     std::pair<std::string, std::string> GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname);
 
-    Elf_Addr OffsetFromAddr(Elf_Addr addr);
-    Elf_Addr AddrFromOffset(Elf_Addr offset);
+    Elf_Addr OffsetFromAddr(Elf_Addr addr) const;
+    Elf_Addr AddrFromOffset(Elf_Addr offset) const;
 
 private:
     void ParsePhdrs();

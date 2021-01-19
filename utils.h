@@ -18,7 +18,9 @@
 #define SOLD_LOG_32BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 8))
 #define SOLD_LOG_16BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 4))
 #define SOLD_LOG_8BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key, 2))
+#define SOLD_LOG_BITS(key) SOLD_LOG_KEY_VALUE(#key, HexString(key))
 #define SOLD_LOG_DWEHPE(type) SOLD_LOG_KEY_VALUE(#type, ShowDW_EH_PE(type))
+#define SOLD_CHECK_EQ(a, b) CHECK(a == b) << SOLD_LOG_BITS(a) << SOLD_LOG_BITS(b)
 
 #define Elf_Ehdr Elf64_Ehdr
 #define Elf_Phdr Elf64_Phdr
@@ -58,7 +60,15 @@ std::vector<std::string> SplitString(const std::string& str, const std::string& 
 
 bool HasPrefix(const std::string& str, const std::string& prefix);
 
+template <class T>
+void Write(FILE* fp, const T& v) {
+    CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
+}
 uintptr_t AlignNext(uintptr_t a, uintptr_t mask = 4095);
+void WriteBuf(FILE* fp, const void* buf, size_t size);
+void EmitZeros(FILE* fp, uintptr_t cnt);
+void EmitPad(FILE* fp, uintptr_t to);
+void EmitAlign(FILE* fp);
 
 struct Range {
     uintptr_t start;
@@ -100,6 +110,41 @@ struct TLS {
     uintptr_t filesz{0};
     uintptr_t memsz{0};
     Elf_Xword align{0};
+};
+
+struct EHFrameHeader {
+    struct FDETableEntry {
+        int32_t initial_loc;
+        int32_t fde_ptr;
+    };
+
+    struct CIE {
+        uint32_t length;
+        int32_t CIE_id;
+        uint8_t version;
+        const char* aug_str;
+        uint8_t FDE_encoding;
+        uint8_t LSDA_encoding;
+    };
+
+    struct FDE {
+        uint32_t length;
+        uint64_t extended_length;
+        int32_t CIE_delta;
+        int32_t initial_loc;
+    };
+
+    uint8_t version;
+    uint8_t eh_frame_ptr_enc;
+    uint8_t fde_count_enc;
+    uint8_t table_enc;
+
+    int32_t eh_frame_ptr;
+    uint32_t fde_count;
+
+    std::vector<FDETableEntry> table;
+    std::vector<FDE> fdes;
+    std::vector<CIE> cies;
 };
 
 bool is_special_ver_ndx(Elf64_Versym v);
