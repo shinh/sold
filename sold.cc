@@ -328,6 +328,19 @@ void Sold::EmitGnuHash(FILE* fp) {
     }
 }
 
+uintptr_t Sold::TLSMemSize() const {
+    static uintptr_t s = 0;
+    if (s != 0) return s;
+    for (ELFBinary* bin : link_binaries_) {
+        for (Elf_Phdr* phdr : bin->phdrs()) {
+            if (phdr->p_type == PT_TLS) {
+                s += phdr->p_memsz;
+            }
+        }
+    }
+    return s;
+}
+
 // Decide locations for each linked shared objects
 // TODO(akawashiro) Is the initial value of offset optimal?
 void Sold::DecideOffsets() {
