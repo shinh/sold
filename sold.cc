@@ -132,8 +132,10 @@ void Sold::BuildLoads() {
         }
     }
     tls_file_offset_ = file_offset;
-    file_offset = AlignNext(file_offset + tls_.filesz);
+    file_offset = AlignNext(file_offset + TLSFileSize());
     ehframe_file_offset_ = file_offset;
+    file_offset = AlignNext(file_offset + EHFrameSize());
+    mprotect_file_offset_ = file_offset;
 }
 
 void Sold::BuildArrays() {
@@ -355,6 +357,8 @@ void Sold::DecideMemOffset() {
     offset = AlignNext(offset + TLSMemSize());
     ehframe_offset_ = offset;
     offset = AlignNext(offset + EHFrameSize());
+    mprotect_offset_ = offset;
+    offset = AlignNext(offset + MprotectSize());
 }
 
 void Sold::CollectTLS() {

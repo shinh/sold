@@ -119,7 +119,21 @@ private:
         s += n_fdes * (sizeof(EHFrameHeader::FDETableEntry::fde_ptr) + sizeof(EHFrameHeader::FDETableEntry::initial_loc));
         return s;
     }
-    uintptr_t ShdrOffset() const { return EHFrameOffset() + EHFrameSize(); }
+
+    uintptr_t MemprotectOffset() const { return mprotect_file_offset_; }
+    uintptr_t MprotectSize() const {
+        int n_memprotect = 0;
+        for (ELFBinary* bin : link_binaries_) {
+            for (Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_GNU_RELRO) {
+                    n_memprotect++;
+                }
+            }
+        }
+        return sizeof(MprotectBuilder::memprotect_start_code) + sizeof(MprotectBuilder::memprotect_body_code) * n_memprotect +
+               sizeof(MprotectBuilder::memprotect_end_code);
+    }
+    uintptr_t ShdrOffset() const { return MemprotectOffset() + MprotectSize(); }
 
     void BuildEhdr();
 
