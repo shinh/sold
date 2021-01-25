@@ -10,6 +10,7 @@
 #include "elf_binary.h"
 #include "hash.h"
 #include "ldsoconf.h"
+#include "mprotect_builder.h"
 #include "shdr_builder.h"
 #include "strtab_builder.h"
 #include "symtab_builder.h"
@@ -38,6 +39,9 @@ private:
         num_phdrs += 2;
         // GNU_STACK
         num_phdrs++;
+        // GNU_RELRO
+        num_phdrs++;
+        // Normal PT_LOAD
         for (ELFBinary* bin : link_binaries_) {
             num_phdrs += bin->loads().size();
         }
@@ -154,6 +158,15 @@ private:
         SOLD_CHECK_EQ(EHFrameSize(), ehframe_builder_.Size());
     }
 
+    void BuildMprotect() {
+        for (const ELFBinary* bin : link_binaries_) {
+            const Elf_Phdr* r = bin->gnu_relro();
+            if (r) {
+                memprotect_builder_.Add(r->p_vaddr + offsets_[bin], r->p_memsz);
+            }
+        }
+    }
+
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
         Elf_Dyn dyn;
         dyn.d_tag = tag;
@@ -252,6 +265,13 @@ private:
         CHECK(ftell(fp) == EHFrameOffset());
         LOG(INFO) << SOLD_LOG_BITS(ftell(fp)) << SOLD_LOG_BITS(EHFrameOffset()) << SOLD_LOG_BITS(ehframe_builder_.Size());
         ehframe_builder_.Emit(fp);
+    }
+
+    void EmitMemprotect(FILE* fp) {
+        EmitPad(fp, MemprotectOffset());
+        SOLD_CHECK_EQ(ftell(fp), MemprotectOffset());
+        LOG(INFO) << SOLD_LOG_BITS(ftell(fp)) << SOLD_LOG_BITS(MemprotectOffset()) << SOLD_LOG_BITS(MprotectSize());
+        memprotect_builder_.Emit(fp, mprotect_offset_);
     }
 
     void EmitShdr(FILE* fp) {
@@ -371,8 +391,10 @@ private:
     std::map<std::string, std::string> soname_to_filename_;
     uintptr_t tls_file_offset_{0};
     uintptr_t ehframe_file_offset_{0};
+    uintptr_t mprotect_file_offset_{0};
     uintptr_t tls_offset_{0};
     uintptr_t ehframe_offset_{0};
+    uintptr_t mprotect_offset_{0};
     bool is_executable_{false};
     bool emit_section_header_;
 
@@ -382,6 +404,7 @@ private:
     StrtabBuilder strtab_;
     VersionBuilder version_;
     EHFrameBuilder ehframe_builder_;
+    MprotectBuilder memprotect_builder_;
     ShdrBuilder shdr_;
     Elf_Ehdr ehdr_;
     std::vector<Load> loads_;
