@@ -26,10 +26,9 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
 }
 
 void Sold::Link(const std::string& out_filename) {
+    DecideMemOffset();
+
     CollectTLS();
-    // We must call DecideOffsets() after CollectTLS() because offsets depend
-    // on the size of TLS template image.
-    DecideOffsets();
     CollectArrays();
     CollectSymbols();
     CopyPublicSymbols();
@@ -328,9 +327,22 @@ void Sold::EmitGnuHash(FILE* fp) {
     }
 }
 
+uintptr_t Sold::TLSMemSize() const {
+    static uintptr_t s = 0;
+    if (s != 0) return s;
+    for (ELFBinary* bin : link_binaries_) {
+        for (Elf_Phdr* phdr : bin->phdrs()) {
+            if (phdr->p_type == PT_TLS) {
+                s += phdr->p_memsz;
+            }
+        }
+    }
+    return s;
+}
+
 // Decide locations for each linked shared objects
 // TODO(akawashiro) Is the initial value of offset optimal?
-void Sold::DecideOffsets() {
+void Sold::DecideMemOffset() {
     uintptr_t offset = 0x10000000;
     for (ELFBinary* bin : link_binaries_) {
         const Range range = bin->GetRange() + offset;
@@ -340,8 +352,9 @@ void Sold::DecideOffsets() {
         offset = range.end;
     }
     tls_offset_ = offset;
-    offset = AlignNext(offset + tls_.memsz);
+    offset = AlignNext(offset + TLSMemSize());
     ehframe_offset_ = offset;
+    offset = AlignNext(offset + EHFrameSize());
 }
 
 void Sold::CollectTLS() {
@@ -360,6 +373,7 @@ void Sold::CollectTLS() {
             }
         }
     }
+    SOLD_CHECK_EQ(tls_.memsz, TLSMemSize());
 
     for (TLS::Data& d : tls_.data) {
         d.bss_offset += tls_.filesz;
@@ -480,7 +494,7 @@ void Sold::CopyPublicSymbols() {
 
 // Make new relocation table.
 // RelocateSymbol_x86_64 rewrites r_offset of each relocation entries
-// because we decided locations of shared objects in DecideOffsets.
+// because we decided locations of shared objects in DecideMemOffset.
 void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t offset) {
     const Elf_Sym* sym = &bin->symtab()[ELF_R_SYM(rel->r_info)];
     auto [soname, version_name] = bin->GetVersion(ELF_R_SYM(rel->r_info), filename_to_soname_);

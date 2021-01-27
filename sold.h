@@ -86,18 +86,39 @@ private:
     }
 
     uintptr_t TLSOffset() const { return tls_file_offset_; }
-    uintptr_t TLSSize() const {
-        uintptr_t s = 0;
-        for (const TLS::Data& data : tls_.data) {
-            s += data.size;
+    uintptr_t TLSFileSize() const {
+        static uintptr_t s = 0;
+        if (s != 0) return s;
+        for (ELFBinary* bin : link_binaries_) {
+            for (Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_TLS) {
+                    s += phdr->p_filesz;
+                }
+            }
         }
         return s;
     }
 
-    uintptr_t EHFrameOffset() const { return TLSOffset() + TLSSize(); }
+    uintptr_t EHFrameOffset() const { return TLSOffset() + TLSFileSize(); }
     // We emit EHFrame whenever the number of FDEs is 0.
-    uintptr_t EHFrameSize() const { return ehframe_builder_.Size(); }
+    uintptr_t EHFrameSize() const {
+        static uintptr_t s = 0;
+        if (s != 0) return s;
 
+        int n_fdes = 0;
+        s = sizeof(EHFrameHeader::version) + sizeof(EHFrameHeader::eh_frame_ptr_enc) + sizeof(EHFrameHeader::fde_count_enc) +
+            sizeof(EHFrameHeader::table_enc) + sizeof(EHFrameHeader::eh_frame_ptr) + sizeof(EHFrameHeader::fde_count);
+
+        for (ELFBinary* bin : link_binaries_) {
+            for (Elf_Phdr* phdr : bin->phdrs()) {
+                if (phdr->p_type == PT_GNU_EH_FRAME) {
+                    n_fdes += bin->eh_frame_header()->fde_count;
+                }
+            }
+        }
+        s += n_fdes * (sizeof(EHFrameHeader::FDETableEntry::fde_ptr) + sizeof(EHFrameHeader::FDETableEntry::initial_loc));
+        return s;
+    }
     uintptr_t ShdrOffset() const { return EHFrameOffset() + EHFrameSize(); }
 
     void BuildEhdr();
@@ -116,6 +137,7 @@ private:
                 }
             }
         }
+        SOLD_CHECK_EQ(EHFrameSize(), ehframe_builder_.Size());
     }
 
     void MakeDyn(uint64_t tag, uintptr_t ptr) {
@@ -223,7 +245,8 @@ private:
         shdr_.EmitShdrs(fp);
     }
 
-    void DecideOffsets();
+    uintptr_t TLSMemSize() const;
+    void DecideMemOffset();
 
     void CollectArrays();
 
