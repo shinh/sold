@@ -44,6 +44,7 @@ void Sold::Link(const std::string& out_filename) {
     BuildArrays();
     BuildDynamic();
     BuildEHFrameHeader();
+    BuildMprotect();
 
     strtab_.Freeze();
     BuildLoads();
@@ -89,6 +90,7 @@ void Sold::Emit(const std::string& out_filename) {
     EmitCode(fp);
     EmitTLS(fp);
     EmitEHFrame(fp);
+    EmitMemprotect(fp);
 
     if (emit_section_header_) EmitShdr(fp);
 
@@ -132,8 +134,10 @@ void Sold::BuildLoads() {
         }
     }
     tls_file_offset_ = file_offset;
-    file_offset = AlignNext(file_offset + tls_.filesz);
+    file_offset = AlignNext(file_offset + TLSFileSize());
     ehframe_file_offset_ = file_offset;
+    file_offset = AlignNext(file_offset + EHFrameSize());
+    mprotect_file_offset_ = file_offset;
 }
 
 void Sold::BuildArrays() {
@@ -281,6 +285,18 @@ void Sold::EmitPhdrs(FILE* fp) {
     }
     {
         Elf_Phdr phdr;
+        phdr.p_offset = mprotect_file_offset_;
+        phdr.p_vaddr = mprotect_offset_;
+        phdr.p_paddr = mprotect_offset_;
+        phdr.p_filesz = MprotectSize();
+        phdr.p_memsz = MprotectSize();
+        phdr.p_align = 0x1000;
+        phdr.p_type = PT_LOAD;
+        phdr.p_flags = PF_R | PF_X;
+        phdrs.push_back(phdr);
+    }
+    {
+        Elf_Phdr phdr;
         phdr.p_offset = 0;
         phdr.p_vaddr = 0;
         phdr.p_paddr = 0;
@@ -355,6 +371,8 @@ void Sold::DecideMemOffset() {
     offset = AlignNext(offset + TLSMemSize());
     ehframe_offset_ = offset;
     offset = AlignNext(offset + EHFrameSize());
+    mprotect_offset_ = offset;
+    offset = AlignNext(offset + MprotectSize());
 }
 
 void Sold::CollectTLS() {
@@ -393,6 +411,9 @@ void Sold::CollectArrays() {
             init_array_.push_back(ptr + offset);
         }
     }
+    // TODO(akawashiro) In case of executables, this code causes SEGV. I don't
+    // kwow the reason.
+    if (!is_executable_) init_array_.push_back(mprotect_offset_);
     for (ELFBinary* bin : link_binaries_) {
         uintptr_t offset = offsets_[bin];
         for (uintptr_t ptr : bin->fini_array()) {
