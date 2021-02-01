@@ -292,7 +292,7 @@ void Sold::EmitPhdrs(FILE* fp) {
         phdr.p_memsz = MprotectSize();
         phdr.p_align = 0x1000;
         phdr.p_type = PT_LOAD;
-        phdr.p_flags = PF_R | PF_W | PF_X;
+        phdr.p_flags = PF_R | PF_X;
         phdrs.push_back(phdr);
     }
     {
