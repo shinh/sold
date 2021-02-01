@@ -11,14 +11,10 @@ public:
         offsets.emplace_back(offset);
         sizes.emplace_back(size);
     }
-    uintptr_t Size() const {
-        return sizeof(memprotect_start_code) + sizeof(memprotect_body_code) * offsets.size() + sizeof(memprotect_end_code);
-    }
+    uintptr_t Size() const { return sizeof(memprotect_body_code) * offsets.size() + sizeof(memprotect_end_code); }
     void Emit(FILE* fp, uintptr_t mprotect_code_offset) {
         uint8_t* mprotect_code = (uint8_t*)malloc(Size());
         uint8_t* mprotect_code_head = mprotect_code;
-        memcpy(mprotect_code_head, memprotect_start_code, sizeof(memprotect_start_code));
-        mprotect_code_head += sizeof(memprotect_start_code);
         for (int i = 0; i < offsets.size(); i++) {
             LOG(INFO) << "MprotectBuilder::Emit: " << SOLD_LOG_BITS(offsets[i]) << SOLD_LOG_BITS(sizes[i]);
 
@@ -39,9 +35,6 @@ public:
         CHECK(fwrite(mprotect_code, sizeof(uint8_t), Size(), fp) == Size());
         free(mprotect_code);
     }
-
-    // nop
-    static constexpr uint8_t memprotect_start_code[] = {};
 
     // call SYS_mprotect syscall
     //

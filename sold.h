@@ -134,8 +134,7 @@ private:
                 }
             }
         }
-        return sizeof(MprotectBuilder::memprotect_start_code) + sizeof(MprotectBuilder::memprotect_body_code) * n_memprotect +
-               sizeof(MprotectBuilder::memprotect_end_code);
+        return sizeof(MprotectBuilder::memprotect_body_code) * n_memprotect + sizeof(MprotectBuilder::memprotect_end_code);
     }
     uintptr_t ShdrOffset() const { return MemprotectOffset() + MprotectSize(); }
 
