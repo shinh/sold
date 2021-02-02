@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
-RUN apt-get install -y ninja-build cmake gcc g++ git libdwarf-dev
+RUN apt-get install -y ninja-build cmake gcc g++ git
 COPY . /sold
 WORKDIR /sold
 RUN rm -rf build
