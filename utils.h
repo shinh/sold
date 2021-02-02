@@ -52,6 +52,7 @@
 #pragma once
 
 #include <elf.h>
+#include <stddef.h>
 
 #include <cassert>
 #include <iomanip>
