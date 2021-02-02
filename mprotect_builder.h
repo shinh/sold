@@ -51,8 +51,6 @@ public:
         free(mprotect_code);
     }
 
-    // We apply COPYING.RUNTIME for memprotect_body_code and memprotect_end_code.
-    //
     // call SYS_mprotect syscall
     //
     // mov $0xdeadbeefdeadbeef, %rdi
