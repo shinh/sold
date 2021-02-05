@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.4)
 project(sold LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -23,6 +23,7 @@ add_library(
     elf_binary.cc
     hash.cc
     ldsoconf.cc
+    mprotect_builder.cc
     strtab_builder.cc
     symtab_builder.cc
     shdr_builder.cc

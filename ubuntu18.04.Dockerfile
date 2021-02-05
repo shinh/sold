@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 RUN apt-get update
-RUN apt-get install -y ninja-build cmake gcc g++ git libdwarf-dev
+RUN apt-get install -y ninja-build cmake gcc g++ git
 COPY . /sold
 WORKDIR /sold
 RUN rm -rf build

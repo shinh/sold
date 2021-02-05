@@ -1,6 +1,3 @@
-## How to build
-You need `libdwarf-dev` package.
-
 ## TODO
 - TLS in executables
 - AArch64
