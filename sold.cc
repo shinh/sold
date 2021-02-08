@@ -681,7 +681,7 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
         }
 
         default:
-            LOG(FATAL) << "Unknown relocation type: " << type;
+            LOG(FATAL) << "Unknown relocation type: " << ShowRelocationType(type);
             CHECK(false);
     }
 
