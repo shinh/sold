@@ -663,11 +663,12 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
             break;
         }
 
-        case R_X86_64_DTPOFF64: {
+        case R_X86_64_DTPOFF64:
+        case R_X86_64_TPOFF64: {
             const std::string name = bin->Str(sym->st_name);
             uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
             newrel.r_info = ELF_R_INFO(index, type);
-            LOG(INFO) << "R_X86_64_DTPOFF64 relocation: " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
+            LOG(INFO) << ShowRelocationType(type) << " relocation: " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
                       << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset));
             break;
         }
@@ -680,7 +681,7 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
         }
 
         default:
-            LOG(FATAL) << "Unknown relocation type: " << type;
+            LOG(FATAL) << "Unknown relocation type: " << ShowRelocationType(type);
             CHECK(false);
     }
 
