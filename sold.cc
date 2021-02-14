@@ -740,7 +740,6 @@ std::vector<std::string> Sold::GetLibraryPaths(const ELFBinary* binary) {
 void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
     // We should search for shared objects in BFS order.
     std::queue<const ELFBinary*> bfs_queue;
-    std::set<std::string> pushed_sonames;
 
     bfs_queue.push(root_binary);
 
@@ -767,12 +766,6 @@ void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
             if (!library) {
                 LOG(FATAL) << "Library " << needed << " not found";
                 abort();
-            }
-
-            if (pushed_sonames.find(library->soname()) != pushed_sonames.end()) {
-                LOG(INFO) << SOLD_LOG_KEY(library->name())
-                          << " is not linked because we have already linked another shared object with the same soname.";
-                continue;
             }
 
             // Register (filename, soname)
