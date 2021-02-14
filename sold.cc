@@ -423,16 +423,16 @@ void Sold::CollectArrays() {
         ELFBinary* bin = *iter;
         uintptr_t offset = offsets_[bin];
         for (uintptr_t ptr : bin->init_array()) {
-            init_array_.push_back(ptr + offset);
+            init_array_.emplace_back(ptr + offset);
         }
     }
     // TODO(akawashiro) In case of executables, this code causes SEGV. I don't
     // kwow the reason.
-    if (!is_executable_) init_array_.push_back(mprotect_offset_);
+    if (!is_executable_) init_array_.emplace_back(mprotect_offset_);
     for (ELFBinary* bin : link_binaries_) {
         uintptr_t offset = offsets_[bin];
         for (uintptr_t ptr : bin->fini_array()) {
-            fini_array_.push_back(ptr + offset);
+            fini_array_.emplace_back(ptr + offset);
         }
     }
     LOG(INFO) << "Array numbers: init_array=" << init_array_.size() << " fini_array=" << fini_array_.size();
