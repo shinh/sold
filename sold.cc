@@ -736,7 +736,7 @@ std::vector<std::string> Sold::GetLibraryPaths(const ELFBinary* binary) {
     return library_paths;
 }
 
-std::vector<ELFBinary*> ToplologicalSort(std::map<std::string, ELFBinary*> needed_to_bin) {
+std::vector<ELFBinary*> TopologicalSort(std::map<std::string, ELFBinary*> needed_to_bin) {
     std::vector<ELFBinary*> ret;
     std::queue<std::string> next_node;
     std::map<std::string, int> n_incoming_edge;
