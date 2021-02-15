@@ -738,6 +738,7 @@ std::vector<std::string> Sold::GetLibraryPaths(const ELFBinary* binary) {
     return library_paths;
 }
 
+// This implementation is compatible with _dl_sort_maps in glibc/elf/dl-sort-maps.c.
 std::vector<ELFBinary*> TopologicalSort(std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf) {
     if (link_binaries_buf.size() < 1) {
         return {};
