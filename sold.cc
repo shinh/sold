@@ -15,6 +15,8 @@
 
 #include "sold.h"
 
+#include <algorithm>
+#include <list>
 #include <queue>
 #include <set>
 
@@ -736,42 +738,40 @@ std::vector<std::string> Sold::GetLibraryPaths(const ELFBinary* binary) {
     return library_paths;
 }
 
-std::vector<ELFBinary*> TopologicalSort(std::map<std::string, ELFBinary*> needed_to_bin) {
-    std::vector<ELFBinary*> ret;
-    std::queue<std::string> next_node;
-    std::map<std::string, int> n_incoming_edge;
-
-    for (const auto& p : needed_to_bin) n_incoming_edge[p.first] = 0;
-    for (const auto& p : needed_to_bin) {
-        for (const std::string& s : p.second->neededs()) {
-            if (needed_to_bin.count(s)) n_incoming_edge[s]++;
-        }
+std::vector<ELFBinary*> TopologicalSort(std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf) {
+    if (link_binaries_buf.size() < 1) {
+        return {};
     }
 
-    for (const std::pair<std::string, int> p : n_incoming_edge) {
-        if (p.second == 0) next_node.push(p.first);
-    }
+    // The third element of tuple is `seen' variable in glibc/elf/dl-sort-maps.c
+    std::list<std::tuple<std::string, ELFBinary*, int>> buf;
+    for (const auto& p : link_binaries_buf) buf.emplace_back(p.first, p.second, 0);
 
-    while (!next_node.empty()) {
-        std::string s = next_node.front();
-        next_node.pop();
-        ret.emplace_back(needed_to_bin[s]);
-        LOG(INFO) << SOLD_LOG_KEY(s);
+    auto i_it = buf.begin();
+    int n_rest = buf.size();
+    while (1) {
+        std::get<2>(*i_it)++;
 
-        const ELFBinary* b = needed_to_bin[s];
-        CHECK(b != nullptr);
-        for (const auto& s : b->neededs()) {
-            if (!needed_to_bin.count(s)) continue;
-            n_incoming_edge[s]--;
-            if (n_incoming_edge[s] == 0) {
-                next_node.push(s);
+        auto k_it = buf.end();
+        k_it--;
+        while (i_it != k_it) {
+            const auto& neededs = std::get<1>(*k_it)->neededs();
+            if (std::find(neededs.begin(), neededs.end(), std::get<0>(*i_it)) != neededs.end()) {
+                buf.insert(buf.end(), *i_it);
+                i_it = buf.erase(i_it);
+                if (std::get<2>(*i_it) > n_rest) break;
+
+                goto next;
             }
+            --k_it;
         }
+        if (i_it == buf.end() || ++i_it == buf.end()) break;
+        for (auto it = buf.begin(); it != buf.end(); it++) std::get<2>(*it) = 0;
+    next:;
     }
 
-    for (const std::pair<std::string, int> p : n_incoming_edge) {
-        CHECK(p.second == 0) << p.first << " is in a circular dependency.";
-    }
+    std::vector<ELFBinary*> ret;
+    for (const auto& t : buf) ret.emplace_back(std::get<1>(t));
 
     return ret;
 }
@@ -779,10 +779,10 @@ std::vector<ELFBinary*> TopologicalSort(std::map<std::string, ELFBinary*> needed
 void Sold::ResolveLibraryPaths(ELFBinary* root_binary) {
     // We should search for shared objects in BFS order.
     std::queue<const ELFBinary*> bfs_queue;
-    std::map<std::string, ELFBinary*> link_binaries_buf;
+    std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf;
 
     bfs_queue.push(root_binary);
-    CHECK(link_binaries_buf.emplace("", root_binary).second);
+    link_binaries_buf.emplace_back("", root_binary);
 
     while (!bfs_queue.empty()) {
         const ELFBinary* binary = bfs_queue.front();
@@ -820,7 +820,7 @@ void Sold::ResolveLibraryPaths(ELFBinary* root_binary) {
             }
 
             if (ShouldLink(library->soname())) {
-                CHECK(link_binaries_buf.emplace(needed, library.get()).second);
+                link_binaries_buf.emplace_back(needed, library.get());
             }
 
             LOG(INFO) << "Loaded: " << needed << " => " << library->filename();
@@ -831,7 +831,7 @@ void Sold::ResolveLibraryPaths(ELFBinary* root_binary) {
         }
     }
 
-    link_binaries_ = ToplologicalSort(link_binaries_buf);
+    link_binaries_ = TopologicalSort(link_binaries_buf);
 }
 
 bool Sold::ShouldLink(const std::string& soname) {
