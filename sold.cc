@@ -767,7 +767,7 @@ std::vector<ELFBinary*> TopologicalSort(std::vector<std::pair<std::string, ELFBi
             --k_it;
         }
         if (i_it == buf.end() || ++i_it == buf.end()) break;
-        for (auto it = buf.begin(); it != buf.end(); it++) std::get<2>(*it) = 0;
+        for (auto it = i_it; it != buf.end(); it++) std::get<2>(*it) = 0;
     next:;
     }
 
