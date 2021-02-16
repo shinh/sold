@@ -375,7 +375,7 @@ private:
 
     std::vector<std::string> GetLibraryPaths(const ELFBinary* binary);
 
-    void ResolveLibraryPaths(const ELFBinary* root_binary);
+    void ResolveLibraryPaths(ELFBinary* root_binary);
 
     bool Exists(const std::string& filename) {
         struct stat st;

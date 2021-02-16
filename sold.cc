@@ -15,6 +15,8 @@
 
 #include "sold.h"
 
+#include <algorithm>
+#include <list>
 #include <queue>
 #include <set>
 
@@ -22,7 +24,6 @@ Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& excl
     : exclude_sos_(exclude_sos), emit_section_header_(emit_section_header) {
     main_binary_ = ReadELF(elf_filename);
     is_executable_ = main_binary_->FindPhdr(PT_INTERP);
-    link_binaries_.push_back(main_binary_.get());
 
     // Register (filename, soname) of main_binary_
     if (main_binary_->name() != "" && main_binary_->soname() != "") {
@@ -423,16 +424,16 @@ void Sold::CollectArrays() {
         ELFBinary* bin = *iter;
         uintptr_t offset = offsets_[bin];
         for (uintptr_t ptr : bin->init_array()) {
-            init_array_.push_back(ptr + offset);
+            init_array_.emplace_back(ptr + offset);
         }
     }
     // TODO(akawashiro) In case of executables, this code causes SEGV. I don't
     // kwow the reason.
-    if (!is_executable_) init_array_.push_back(mprotect_offset_);
+    if (!is_executable_) init_array_.emplace_back(mprotect_offset_);
     for (ELFBinary* bin : link_binaries_) {
         uintptr_t offset = offsets_[bin];
         for (uintptr_t ptr : bin->fini_array()) {
-            fini_array_.push_back(ptr + offset);
+            fini_array_.emplace_back(ptr + offset);
         }
     }
     LOG(INFO) << "Array numbers: init_array=" << init_array_.size() << " fini_array=" << fini_array_.size();
@@ -737,12 +738,52 @@ std::vector<std::string> Sold::GetLibraryPaths(const ELFBinary* binary) {
     return library_paths;
 }
 
-void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
+// This implementation is compatible with _dl_sort_maps in glibc/elf/dl-sort-maps.c.
+std::vector<ELFBinary*> TopologicalSort(std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf) {
+    if (link_binaries_buf.size() < 1) {
+        return {};
+    }
+
+    // The third element of tuple is `seen' variable in glibc/elf/dl-sort-maps.c
+    std::list<std::tuple<std::string, ELFBinary*, int>> buf;
+    for (const auto& p : link_binaries_buf) buf.emplace_back(p.first, p.second, 0);
+
+    auto i_it = buf.begin();
+    int n_rest = buf.size();
+    while (1) {
+        std::get<2>(*i_it)++;
+
+        auto k_it = buf.end();
+        k_it--;
+        while (i_it != k_it) {
+            const auto& neededs = std::get<1>(*k_it)->neededs();
+            if (std::find(neededs.begin(), neededs.end(), std::get<0>(*i_it)) != neededs.end()) {
+                buf.insert(buf.end(), *i_it);
+                i_it = buf.erase(i_it);
+                if (std::get<2>(*i_it) > n_rest) break;
+
+                goto next;
+            }
+            --k_it;
+        }
+        if (i_it == buf.end() || ++i_it == buf.end()) break;
+        for (auto it = i_it; it != buf.end(); it++) std::get<2>(*it) = 0;
+    next:;
+    }
+
+    std::vector<ELFBinary*> ret;
+    for (const auto& t : buf) ret.emplace_back(std::get<1>(t));
+
+    return ret;
+}
+
+void Sold::ResolveLibraryPaths(ELFBinary* root_binary) {
     // We should search for shared objects in BFS order.
     std::queue<const ELFBinary*> bfs_queue;
-    std::set<std::string> pushed_sonames;
+    std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf;
 
     bfs_queue.push(root_binary);
+    link_binaries_buf.emplace_back("", root_binary);
 
     while (!bfs_queue.empty()) {
         const ELFBinary* binary = bfs_queue.front();
@@ -769,12 +810,6 @@ void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
                 abort();
             }
 
-            if (pushed_sonames.find(library->soname()) != pushed_sonames.end()) {
-                LOG(INFO) << SOLD_LOG_KEY(library->name())
-                          << " is not linked because we have already linked another shared object with the same soname.";
-                continue;
-            }
-
             // Register (filename, soname)
             if (library->name() != "" && library->soname() != "") {
                 filename_to_soname_[library->name()] = library->soname();
@@ -786,7 +821,7 @@ void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
             }
 
             if (ShouldLink(library->soname())) {
-                link_binaries_.push_back(library.get());
+                link_binaries_buf.emplace_back(needed, library.get());
             }
 
             LOG(INFO) << "Loaded: " << needed << " => " << library->filename();
@@ -796,6 +831,8 @@ void Sold::ResolveLibraryPaths(const ELFBinary* root_binary) {
             bfs_queue.push(inserted.first->second.get());
         }
     }
+
+    link_binaries_ = TopologicalSort(link_binaries_buf);
 }
 
 bool Sold::ShouldLink(const std::string& soname) {
