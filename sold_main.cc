@@ -25,6 +25,7 @@ Options:
 -i, --input-file INPUT_FILE     Specify the ELF file to output
 -e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
 --section-headers               Emit section headers
+--check-output                  Check the output using sold itself
 
 The last argument is interpreted as SOURCE_FILE when -i option isn't given.
 )" << std::endl;
@@ -39,6 +40,7 @@ int main(int argc, char* const argv[]) {
         {"output-file", required_argument, nullptr, 'o'},
         {"exclude-so", required_argument, nullptr, 'e'},
         {"section-headers", no_argument, nullptr, 1},
+        {"check-output", no_argument, nullptr, 2},
         {0, 0, 0, 0},
     };
 
@@ -46,12 +48,16 @@ int main(int argc, char* const argv[]) {
     std::string output_file;
     std::vector<std::string> exclude_sos;
     bool emit_section_header = false;
+    bool check_output = false;
 
     int opt;
     while ((opt = getopt_long(argc, argv, "hi:o:e:", long_options, nullptr)) != -1) {
         switch (opt) {
             case 1:
                 emit_section_header = true;
+                break;
+            case 2:
+                check_output = true;
                 break;
             case 'e':
                 exclude_sos.push_back(optarg);
@@ -82,5 +88,9 @@ int main(int argc, char* const argv[]) {
 
     Sold sold(input_file, exclude_sos, emit_section_header);
     sold.Link(output_file);
+
+    if (check_output) {
+        Sold check(output_file, exclude_sos, emit_section_header);
+    }
     return 0;
 }
