@@ -118,7 +118,7 @@ private:
         return s;
     }
 
-    uintptr_t EHFrameOffset() const { return TLSOffset() + TLSFileSize(); }
+    uintptr_t EHFrameOffset() const { return AlignNext(TLSOffset() + TLSFileSize()); }
     // We emit EHFrame whenever the number of FDEs is 0.
     uintptr_t EHFrameSize() const {
         static uintptr_t s = 0;
@@ -276,6 +276,7 @@ private:
     }
 
     void EmitEHFrame(FILE* fp) {
+        EmitPad(fp, EHFrameOffset());
         CHECK(ftell(fp) == EHFrameOffset());
         LOG(INFO) << SOLD_LOG_BITS(ftell(fp)) << SOLD_LOG_BITS(EHFrameOffset()) << SOLD_LOG_BITS(ehframe_builder_.Size());
         ehframe_builder_.Emit(fp);

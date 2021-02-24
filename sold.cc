@@ -59,11 +59,11 @@ void Sold::Link(const std::string& out_filename) {
     }
     BuildArrays();
     BuildDynamic();
-    BuildEHFrameHeader();
     BuildMprotect();
 
     strtab_.Freeze();
     BuildLoads();
+    BuildEHFrameHeader();
 
     shdr_.RegisterShdr(GnuHashOffset(), GnuHashSize(), ShdrBuilder::ShdrType::GnuHash);
     shdr_.RegisterShdr(SymtabOffset(), SymtabSize(), ShdrBuilder::ShdrType::Dynsym, sizeof(Elf_Sym));
