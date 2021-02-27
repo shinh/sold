@@ -5,7 +5,7 @@ gcc -Wl,--hash-style=gnu -shared -Wl,-soname,lib.so -o lib.so lib.o
 gcc -Wl,--hash-style=gnu -o main main.c -ldl 
 
 mv lib.so lib.so.original
-../../build/sold -i lib.so.original -o lib.so.soldout --section-headers
+../../build/sold -i lib.so.original -o lib.so.soldout --section-headers --check-output
 
 # Use sold
 ln -sf lib.so.soldout lib.so
