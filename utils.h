@@ -126,6 +126,7 @@
 #define VERSYM_HIDDEN 0x8000
 #define VERSYM_VERSION 0x7fff
 
+static constexpr uintptr_t LINUX_PAGE_SIZE = 0x1000;
 static constexpr Elf_Versym NO_VERSION_INFO = 0xffff;
 
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep);
@@ -136,7 +137,7 @@ template <class T>
 void Write(FILE* fp, const T& v) {
     CHECK(fwrite(&v, sizeof(v), 1, fp) == 1);
 }
-uintptr_t AlignNext(uintptr_t a, uintptr_t mask = 4095);
+uintptr_t AlignNext(uintptr_t a, uintptr_t mask = LINUX_PAGE_SIZE - 1);
 void WriteBuf(FILE* fp, const void* buf, size_t size);
 void EmitZeros(FILE* fp, uintptr_t cnt);
 void EmitPad(FILE* fp, uintptr_t to);
