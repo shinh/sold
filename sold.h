@@ -16,6 +16,7 @@
 #include <libgen.h>
 #include <sys/stat.h>
 
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <string>
@@ -115,6 +116,12 @@ private:
                 }
             }
         }
+
+        // Even if the size of the TLS initialization image in the output
+        // shared object is zero, we emit a dummy image of the page size.
+        // Without this dummy image, memory segments of TLS and EHFrameHeader
+        // overlap.
+        s = std::max(s, LINUX_PAGE_SIZE);
         return s;
     }
 
