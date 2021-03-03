@@ -10,7 +10,7 @@ gcc -Wl,--hash-style=gnu -shared -Wl,-soname,libmax.so -Wl,--version-script,libm
 ln -sf libmax.so.2 libmax.so
 gcc -Wl,--hash-style=gnu -o vertest2 vertest2.c libmax.so
 
-LD_LIBRARY_PATH=. ../../build/sold -e libmax.so -o vertest1.out vertest1 --section-headers 
+LD_LIBRARY_PATH=. ../../build/sold -e libmax.so -o vertest1.out vertest1 --section-headers --check-output 
 LD_LIBRARY_PATH=. ./vertest1.out
-LD_LIBRARY_PATH=. ../../build/sold -e libmax.so -o vertest2.out vertest2  --section-headers
+LD_LIBRARY_PATH=. ../../build/sold -e libmax.so -o vertest2.out vertest2  --section-headers --check-output
 LD_LIBRARY_PATH=. ./vertest2.out

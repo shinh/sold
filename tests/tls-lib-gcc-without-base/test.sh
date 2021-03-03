@@ -10,5 +10,5 @@ gcc -Wl,--hash-style=gnu -o main main.c original/lib.so original/base.so
 
 cp original/base.so sold_out/base.so
 
-LD_LIBRARY_PATH=original ../../build/sold original/lib.so -o sold_out/lib.so --section-headers --exclude-so base.so
+LD_LIBRARY_PATH=original ../../build/sold original/lib.so -o sold_out/lib.so --section-headers --exclude-so base.so --check-output
 LD_LIBRARY_PATH=sold_out ./main
