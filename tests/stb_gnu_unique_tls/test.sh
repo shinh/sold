@@ -7,4 +7,4 @@ mv libunique.so libunique.so.original
 ../../build/sold -i libunique.so.original -o libunique.so.soldout --section-headers --check-output
 ln -sf libunique.so.soldout libunique.so
 
-./main
+LD_LIBRARY_PATH=. ./main
