@@ -396,6 +396,26 @@ private:
         Elf_Phdr emit;
     };
 
+    std::vector<std::string> EXCLUDE_SHARED_OBJECTS = {
+        "libc.so",         // GPL (glibc)
+        "libm.so",         // GPL (glibc)
+        "libdl.so",        // GPL (glibc)
+        "librt.so",        // GPL (glibc)
+        "libpthread.so",   // GPL (glibc)
+        "ld-linux",        // GPL (glibc)
+        "libutil.so",      // GPL (glibc)
+        "libgcc_s.so",     // GPL (gcc)
+        "libstdc++.so",    // GPL (gcc)
+        "libgomp.so",      // GPL (gcc)
+        "libgfortran.so",  // GPL (gcc)
+        "libquadmath.so",  // GPL (gcc)
+        "libudev.so",      // GPL (systemd)
+        "libnuma.so",      // GPL (numactl)
+        "libltdl.so",      // LGPL (libtool)
+        "libcuda.so",      // NVIDIA Software License Agreement and CUDA Supplement to Software License Agreement (CUDA)
+        "libopenblas.so",  // BSD (OpenBLAS) TODO(akawashiro) Including libopenblas.so causes SEGV.
+    };
+
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
     std::vector<std::string> exclude_sos_;

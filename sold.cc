@@ -836,9 +836,7 @@ void Sold::ResolveLibraryPaths(ELFBinary* root_binary) {
 }
 
 bool Sold::ShouldLink(const std::string& soname) {
-    std::vector<std::string> nolink_prefixes = {"libc.so",     "libm.so",      "libdl.so",   "librt.so", "libpthread.so",
-                                                "libgcc_s.so", "libstdc++.so", "libgomp.so", "ld-linux", "libcuda.so"};
-    for (const std::string& prefix : nolink_prefixes) {
+    for (const std::string& prefix : EXCLUDE_SHARED_OBJECTS) {
         if (HasPrefix(soname, prefix)) {
             return false;
         }
