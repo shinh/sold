@@ -204,9 +204,9 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
     gnu_hash_.shift2 = 1;
 
     // exposed_sym_name_vers is used to avoid duplicated symbol
-    std::set<std::pair<std::string, std::string>> exposed_sym_name_vers;
+    std::set<std::tuple<std::string, std::string, std::string>> exposed_sym_name_vers;
     for (const Syminfo& s : exposed_syms_) {
-        CHECK(exposed_sym_name_vers.insert({s.name, s.version}).second) << SOLD_LOG_KEY(s.name);
+        CHECK(exposed_sym_name_vers.insert({s.name, s.soname, s.version}).second) << SOLD_LOG_KEY(s.name);
     }
 
     for (const auto& p : public_syms_) {
@@ -223,7 +223,7 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
 
         Syminfo s{p.name, p.soname, p.version, p.versym, sym};
 
-        if (exposed_sym_name_vers.insert({s.name, s.version}).second) {
+        if (exposed_sym_name_vers.insert({s.name, s.soname, s.version}).second) {
             exposed_syms_.push_back(s);
             symtab_.push_back(*sym);
 
