@@ -1,16 +1,10 @@
-#! /bin/bash -eu
+#! /bin/bash -eux
 
-g++ -fPIC -c -o lib.o lib.cc
-g++ -lpthread -Wl,--hash-style=gnu -shared -Wl,-soname,lib.so -o lib.so lib.o
-g++ -Wl,--hash-style=gnu -o main main.cc lib.so -lpthread
+g++ -fPIC -shared -Wl,-soname,libhoge.so -o libhoge.so hoge.cc
+g++ -fPIC -shared -Wl,-soname,libfuga.so -o libfuga.so fuga.cc libhoge.so
+g++ -o main main.cc libfuga.so -pthread
 
-mv lib.so lib.so.original
-../../build/sold -i lib.so.original -o lib.so.soldout --section-headers --check-output
-
-# Use sold
-ln -sf lib.so.soldout lib.so
-
-# Use original
-# ln -sf lib.so.original lib.so
-
+mv libfuga.so libfuga.so.original
+GLOG_log_dir=. LD_LIBRARY_PATH=. ../../build/sold -i libfuga.so.original -o libfuga.so.soldout --section-headers
+ln -sf libfuga.so.soldout libfuga.so
 LD_LIBRARY_PATH=. ./main

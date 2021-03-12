@@ -1,3 +1,6 @@
+libfuga.so
+libfuga.so.original
+libfuga.so.soldout
+libhoge.so
 main
-lib.so.original
-lib.so.soldout
+sold.*
