@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <functional>
 #include <limits>
+#include <set>
 
 SymtabBuilder::SymtabBuilder() {
     Syminfo si;
@@ -202,6 +203,12 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
     gnu_hash_.maskwords = 1;
     gnu_hash_.shift2 = 1;
 
+    // exposed_sym_name_vers is used to avoid duplicated symbol
+    std::set<std::pair<std::string, std::string>> exposed_sym_name_vers;
+    for (const Syminfo& s : exposed_syms_) {
+        CHECK(exposed_sym_name_vers.insert({s.name, s.version}).second) << SOLD_LOG_KEY(s.name);
+    }
+
     for (const auto& p : public_syms_) {
         LOG(INFO) << "SymtabBuilder::MergePublicSymbols " << p.name;
 
@@ -215,10 +222,13 @@ void SymtabBuilder::MergePublicSymbols(StrtabBuilder& strtab, VersionBuilder& ve
         sym->st_shndx = 1;
 
         Syminfo s{p.name, p.soname, p.version, p.versym, sym};
-        exposed_syms_.push_back(s);
-        symtab_.push_back(*sym);
 
-        version.Add(s.versym, s.soname, s.version, strtab, sym->st_info);
+        if (exposed_sym_name_vers.insert({s.name, s.version}).second) {
+            exposed_syms_.push_back(s);
+            symtab_.push_back(*sym);
+
+            version.Add(s.versym, s.soname, s.version, strtab, sym->st_info);
+        }
     }
     public_syms_.clear();
 }
