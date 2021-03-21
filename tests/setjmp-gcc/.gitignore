@@ -1,4 +1,4 @@
-lib.so
-lib.so.original
-lib.so.soldout
+libhoge.so
+libhoge.so.original
+libhoge.so.soldout
 main

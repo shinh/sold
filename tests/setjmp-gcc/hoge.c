@@ -1,4 +1,4 @@
-#include "lib.h"
+#include "hoge.h"
 
 int counter = 0;
 jmp_buf buf;

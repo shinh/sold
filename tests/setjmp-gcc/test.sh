@@ -1,16 +1,15 @@
-#! /bin/bash -eu
+#! /bin/bash -eux
 
-gcc -fPIC -c -o lib.o lib.c
-gcc -Wl,--hash-style=gnu -shared -Wl,-soname,lib.so -o lib.so lib.o
-gcc -Wl,--hash-style=gnu -o main main.c lib.so
+gcc -shared -fPIC -Wl,-soname,libhoge.so -o libhoge.so hoge.c
+gcc -o main main.c libhoge.so
 
-mv lib.so lib.so.original
-../../build/sold -i lib.so.original -o lib.so.soldout --section-headers
+mv libhoge.so libhoge.so.original
+../../build/sold -i libhoge.so.original -o libhoge.so.soldout --section-headers
 
 # Use sold
-ln -sf lib.so.soldout lib.so
+ln -sf libhoge.so.soldout libhoge.so
 
 # Use original
 # ln -sf lib.so.original lib.so
 
-./main
+LD_LIBRARY_PATH=. ./main
