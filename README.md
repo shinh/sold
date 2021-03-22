@@ -40,7 +40,7 @@ sold -i [INPUT] -o [OUTPUT]
 ```
 Options
 - `--section-headers`: Emit section headers. Output shared objects work without section headers but they are useful for debugging.
-- `--check-output`: Check the output using sold itself.
+- `--check-output`: Check integrity of the output by parsing it again.
 - `--exclude-so`: Specify a shared object not to combine.
 
 # For developers
