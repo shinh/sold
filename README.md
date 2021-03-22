@@ -39,7 +39,7 @@ Now you can see the `sold` in `build` directory.
 sold -i [INPUT] -o [OUTPUT]
 ```
 Options
-- `--section-headers`: Emit section headers. This is not needed to work as a shared object but useful for debug.
+- `--section-headers`: Emit section headers. Output shared objects work without section headers but they are useful for debugging.
 - `--check-output`: Check the output using sold itself.
 - `--exclude-so`: Specify a shared object not to combine.
 
