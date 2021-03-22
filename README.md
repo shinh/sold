@@ -21,7 +21,7 @@ shared objects. For example,
 ```
 
 ## Requirements
-`sold` is works only on Linux on x86-64 architecture.
+`sold` works only on Linux on x86-64 architecture.
 
 ## How to build
 ```bash
