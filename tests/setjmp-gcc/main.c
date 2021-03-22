@@ -1,4 +1,4 @@
-#include "lib.h"
+#include "hoge.h"
 
 int main() {
     printf("call setjmp_longjmp_in_function\n");
