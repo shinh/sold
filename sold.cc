@@ -156,10 +156,9 @@ void Sold::BuildLoads() {
     mprotect_file_offset_ = file_offset;
 
     for (const Load& load : loads_) {
-        LOG(INFO) << "PT_LOAD mapping: name=" << load.bin->name()
-                  << " vaddr=" << load.emit.p_vaddr << " memsz=" << load.emit.p_memsz
-                  << " offset=" << load.emit.p_offset << " filesz=" << load.emit.p_filesz
-                  << " orig_vaddr=" << load.orig->p_vaddr << " orig_offset=" << load.orig->p_offset;
+        LOG(INFO) << "PT_LOAD mapping: name=" << load.bin->name() << " vaddr=" << load.emit.p_vaddr << " memsz=" << load.emit.p_memsz
+                  << " offset=" << load.emit.p_offset << " filesz=" << load.emit.p_filesz << " orig_vaddr=" << load.orig->p_vaddr
+                  << " orig_offset=" << load.orig->p_offset;
     }
 }
 
