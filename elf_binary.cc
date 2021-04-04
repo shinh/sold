@@ -66,23 +66,33 @@ Range ELFBinary::GetRange() const {
     return range;
 }
 
-bool ELFBinary::InTLS(uintptr_t offset) const {
+bool ELFBinary::IsVaddrInTLSData(uintptr_t vaddr) const {
     if (tls_) {
-        return tls_->p_vaddr <= offset && offset < tls_->p_vaddr + tls_->p_memsz;
+        uint64_t a = vaddr;
+        uint64_t s = tls_->p_vaddr;
+        uint64_t e = tls_->p_vaddr + tls_->p_filesz;
+        bool ret = s <= a && a < e;
+        return ret;
     }
     return false;
 }
 
-bool ELFBinary::InTLSData(uintptr_t tls_offset) const {
-    if (tls_ && tls_offset < tls_->p_memsz) {
-        return tls_offset < tls_->p_filesz;
+bool ELFBinary::IsOffsetInTLSData(uintptr_t tls_offset) const {
+    uint64_t o = tls_offset;
+    uint64_t m = tls_ ? tls_->p_memsz : 0;
+    uint64_t f = tls_ ? tls_->p_filesz : 0;
+    if (tls_ && o < m) {
+        return o < f;
     }
     LOG(FATAL) << SOLD_LOG_KEY(tls_) << SOLD_LOG_KEY(tls_offset);
 }
 
-bool ELFBinary::InTLSBSS(uintptr_t tls_offset) const {
-    if (tls_ && tls_offset < tls_->p_memsz) {
-        return (tls_->p_filesz <= tls_offset);
+bool ELFBinary::IsOffsetInTLSBSS(uintptr_t tls_offset) const {
+    uint64_t o = tls_offset;
+    uint64_t m = tls_ ? tls_->p_memsz : 0;
+    uint64_t f = tls_ ? tls_->p_filesz : 0;
+    if (tls_ && o < m) {
+        return f <= o;
     }
     LOG(FATAL) << SOLD_LOG_KEY(tls_) << SOLD_LOG_KEY(tls_offset);
 }
