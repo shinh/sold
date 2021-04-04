@@ -546,7 +546,7 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
     int type = ELF_R_TYPE(rel->r_info);
     const uintptr_t addend = rel->r_addend;
     Elf_Rel newrel = *rel;
-    if (bin->InTLS(rel->r_offset)) {
+    if (bin->IsVaddrInTLSData(rel->r_offset)) {
         const Elf_Phdr* tls = bin->tls();
         CHECK(tls);
         uintptr_t off = newrel.r_offset - tls->p_vaddr;
