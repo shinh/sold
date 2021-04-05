@@ -68,9 +68,9 @@ Range ELFBinary::GetRange() const {
 
 bool ELFBinary::IsVaddrInTLSData(uintptr_t vaddr) const {
     if (tls_) {
-        uint64_t a = vaddr;
-        uint64_t s = tls_->p_vaddr;
-        uint64_t e = tls_->p_vaddr + tls_->p_filesz;
+        uint64_t a = reinterpret_cast<uint64_t>(vaddr);
+        uint64_t s = reinterpret_cast<uint64_t>(tls_->p_vaddr);
+        uint64_t e = reinterpret_cast<uint64_t>(tls_->p_vaddr + tls_->p_filesz);
         bool ret = s <= a && a < e;
         return ret;
     }
@@ -78,9 +78,9 @@ bool ELFBinary::IsVaddrInTLSData(uintptr_t vaddr) const {
 }
 
 bool ELFBinary::IsOffsetInTLSData(uintptr_t tls_offset) const {
-    uint64_t o = tls_offset;
-    uint64_t m = tls_ ? tls_->p_memsz : 0;
-    uint64_t f = tls_ ? tls_->p_filesz : 0;
+    uint64_t o = reinterpret_cast<uint64_t>(tls_offset);
+    uint64_t m = tls_ ? reinterpret_cast<uint64_t>(tls_->p_memsz) : 0;
+    uint64_t f = tls_ ? reinterpret_cast<uint64_t>(tls_->p_filesz) : 0;
     if (tls_ && o < m) {
         return o < f;
     }
@@ -88,9 +88,9 @@ bool ELFBinary::IsOffsetInTLSData(uintptr_t tls_offset) const {
 }
 
 bool ELFBinary::IsOffsetInTLSBSS(uintptr_t tls_offset) const {
-    uint64_t o = tls_offset;
-    uint64_t m = tls_ ? tls_->p_memsz : 0;
-    uint64_t f = tls_ ? tls_->p_filesz : 0;
+    uint64_t o = reinterpret_cast<uint64_t>(tls_offset);
+    uint64_t m = tls_ ? reinterpret_cast<uint64_t>(tls_->p_memsz) : 0;
+    uint64_t f = tls_ ? reinterpret_cast<uint64_t>(tls_->p_filesz) : 0;
     if (tls_ && o < m) {
         return f <= o;
     }
