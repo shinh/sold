@@ -66,23 +66,23 @@ Range ELFBinary::GetRange() const {
     return range;
 }
 
-bool ELFBinary::InTLS(uintptr_t offset) const {
+bool ELFBinary::IsVaddrInTLSData(uintptr_t vaddr) const {
     if (tls_) {
-        return tls_->p_vaddr <= offset && offset < tls_->p_vaddr + tls_->p_memsz;
+        return tls_->p_vaddr <= vaddr && vaddr < (tls_->p_vaddr + tls_->p_filesz);
     }
     return false;
 }
 
-bool ELFBinary::InTLSData(uintptr_t tls_offset) const {
+bool ELFBinary::IsOffsetInTLSData(uintptr_t tls_offset) const {
     if (tls_ && tls_offset < tls_->p_memsz) {
         return tls_offset < tls_->p_filesz;
     }
     LOG(FATAL) << SOLD_LOG_KEY(tls_) << SOLD_LOG_KEY(tls_offset);
 }
 
-bool ELFBinary::InTLSBSS(uintptr_t tls_offset) const {
+bool ELFBinary::IsOffsetInTLSBSS(uintptr_t tls_offset) const {
     if (tls_ && tls_offset < tls_->p_memsz) {
-        return (tls_->p_filesz <= tls_offset);
+        return tls_->p_filesz <= tls_offset;
     }
     LOG(FATAL) << SOLD_LOG_KEY(tls_) << SOLD_LOG_KEY(tls_offset);
 }

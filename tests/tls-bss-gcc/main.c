@@ -1,7 +1,6 @@
 #include <stdio.h>
-#include <threads.h>
 
-thread_local int tls_bss_i;
+__thread int tls_bss_i;
 
 int main() {
     tls_bss_i = 2;

@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <threads.h>
 
 thread_local int tls_bss_i;
 

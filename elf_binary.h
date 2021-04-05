@@ -66,9 +66,9 @@ public:
 
     Range GetRange() const;
 
-    bool InTLS(uintptr_t offset) const;
-    bool InTLSData(uintptr_t offset) const;
-    bool InTLSBSS(uintptr_t offset) const;
+    bool IsVaddrInTLSData(uintptr_t vaddr) const;
+    bool IsOffsetInTLSData(uintptr_t offset) const;
+    bool IsOffsetInTLSBSS(uintptr_t offset) const;
 
     void ReadDynSymtab(const std::map<std::string, std::string>& filename_to_soname);
 

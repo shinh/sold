@@ -156,10 +156,9 @@ void Sold::BuildLoads() {
     mprotect_file_offset_ = file_offset;
 
     for (const Load& load : loads_) {
-        LOG(INFO) << "PT_LOAD mapping: name=" << load.bin->name()
-                  << " vaddr=" << load.emit.p_vaddr << " memsz=" << load.emit.p_memsz
-                  << " offset=" << load.emit.p_offset << " filesz=" << load.emit.p_filesz
-                  << " orig_vaddr=" << load.orig->p_vaddr << " orig_offset=" << load.orig->p_offset;
+        LOG(INFO) << "PT_LOAD mapping: name=" << load.bin->name() << " vaddr=" << load.emit.p_vaddr << " memsz=" << load.emit.p_memsz
+                  << " offset=" << load.emit.p_offset << " filesz=" << load.emit.p_filesz << " orig_vaddr=" << load.orig->p_vaddr
+                  << " orig_offset=" << load.orig->p_offset;
     }
 }
 
@@ -547,7 +546,7 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
     int type = ELF_R_TYPE(rel->r_info);
     const uintptr_t addend = rel->r_addend;
     Elf_Rel newrel = *rel;
-    if (bin->InTLS(rel->r_offset)) {
+    if (bin->IsVaddrInTLSData(rel->r_offset)) {
         const Elf_Phdr* tls = bin->tls();
         CHECK(tls);
         uintptr_t off = newrel.r_offset - tls->p_vaddr;
@@ -610,7 +609,7 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
             uint64_t* mod_on_got =
                 const_cast<uint64_t*>(reinterpret_cast<const uint64_t*>(bin->head() + bin->OffsetFromAddr(rel->r_offset)));
             uint64_t* offset_on_got = mod_on_got + 1;
-            const bool is_bss = bin->InTLSBSS(*offset_on_got);
+            const bool is_bss = bin->IsOffsetInTLSBSS(*offset_on_got);
 
             // We assume dl_tls_index exists in GOT. This struct is used as
             // the argument of __tls_get_addr.
