@@ -744,6 +744,15 @@ std::vector<std::string> Sold::GetLibraryPaths(const ELFBinary* binary) {
     return library_paths;
 }
 
+std::vector<ELFBinary*> KeepOrder(std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf) {
+    std::vector<ELFBinary*> res;
+    for (const auto& p : link_binaries_buf) {
+        res.emplace_back(std::get<1>(p));
+    }
+
+    return res;
+}
+
 // This implementation is compatible with _dl_sort_maps in glibc/elf/dl-sort-maps.c.
 std::vector<ELFBinary*> TopologicalSort(std::vector<std::pair<std::string, ELFBinary*>> link_binaries_buf) {
     if (link_binaries_buf.size() < 1) {
@@ -838,7 +847,8 @@ void Sold::ResolveLibraryPaths(ELFBinary* root_binary) {
         }
     }
 
-    link_binaries_ = TopologicalSort(link_binaries_buf);
+    // link_binaries_ = TopologicalSort(link_binaries_buf);
+    link_binaries_ = KeepOrder(link_binaries_buf);
 }
 
 bool Sold::ShouldLink(const std::string& soname) {
