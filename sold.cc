@@ -20,8 +20,9 @@
 #include <queue>
 #include <set>
 
-Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, bool emit_section_header)
-    : exclude_sos_(exclude_sos), emit_section_header_(emit_section_header) {
+Sold::Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, const std::vector<std::string>& exclude_finis,
+           bool emit_section_header)
+    : exclude_sos_(exclude_sos), exclude_finis_(exclude_finis), emit_section_header_(emit_section_header) {
     main_binary_ = ReadELF(elf_filename);
     is_executable_ = main_binary_->FindPhdr(PT_INTERP);
 
@@ -438,6 +439,8 @@ void Sold::CollectArrays() {
     if (!is_executable_) init_array_.emplace_back(mprotect_offset_);
     for (ELFBinary* bin : link_binaries_) {
         uintptr_t offset = offsets_[bin];
+        if (std::any_of(exclude_finis_.cbegin(), exclude_finis_.cend(), [bin](const auto s) { return HasPrefix(bin->soname(), s); }))
+            continue;
         for (uintptr_t ptr : bin->fini_array()) {
             fini_array_.emplace_back(ptr + offset);
         }
