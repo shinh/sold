@@ -34,7 +34,8 @@
 
 class Sold {
 public:
-    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, bool emit_section_header);
+    Sold(const std::string& elf_filename, const std::vector<std::string>& exclude_sos, const std::vector<std::string>& exclude_finis,
+         bool emit_section_header);
 
     void Link(const std::string& out_filename);
 
@@ -419,6 +420,7 @@ private:
     std::unique_ptr<ELFBinary> main_binary_;
     std::vector<std::string> ld_library_paths_;
     std::vector<std::string> exclude_sos_;
+    std::vector<std::string> exclude_finis_;
     std::map<std::string, std::unique_ptr<ELFBinary>> libraries_;
     std::vector<ELFBinary*> link_binaries_;
     std::map<const ELFBinary*, uintptr_t> offsets_;

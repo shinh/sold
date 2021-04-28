@@ -26,6 +26,7 @@ Options:
 -e, --exclude-so EXCLUDE_FILE   Specify the ELF file to exclude (e.g. libmax.so) 
 --section-headers               Emit section headers
 --check-output                  Check the output using sold itself
+--exclude-from-fini             Do not use .fini_array of the ELF file
 
 The last argument is interpreted as SOURCE_FILE when -i option isn't given.
 )" << std::endl;
@@ -41,12 +42,14 @@ int main(int argc, char* const argv[]) {
         {"exclude-so", required_argument, nullptr, 'e'},
         {"section-headers", no_argument, nullptr, 1},
         {"check-output", no_argument, nullptr, 2},
+        {"exclude-from-fini", required_argument, nullptr, 3},
         {0, 0, 0, 0},
     };
 
     std::string input_file;
     std::string output_file;
     std::vector<std::string> exclude_sos;
+    std::vector<std::string> exclude_finis;
     bool emit_section_header = false;
     bool check_output = false;
 
@@ -58,6 +61,9 @@ int main(int argc, char* const argv[]) {
                 break;
             case 2:
                 check_output = true;
+                break;
+            case 3:
+                exclude_finis.push_back(optarg);
                 break;
             case 'e':
                 exclude_sos.push_back(optarg);
@@ -86,12 +92,12 @@ int main(int argc, char* const argv[]) {
         return 1;
     }
 
-    Sold sold(input_file, exclude_sos, emit_section_header);
+    Sold sold(input_file, exclude_sos, exclude_finis, emit_section_header);
     sold.Link(output_file);
 
     if (check_output) {
         std::string dummy = output_file + ".dummy-for-check-output";
-        Sold check(output_file, exclude_sos, emit_section_header);
+        Sold check(output_file, exclude_sos, exclude_finis, emit_section_header);
         check.Link(dummy);
         std::remove(dummy.c_str());
     }
