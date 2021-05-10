@@ -1,3 +1,6 @@
 /build
 *.so
+*.original
+*.soldout
 *.o
+*.out
