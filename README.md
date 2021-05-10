@@ -49,9 +49,6 @@ Options
 - AArch64
 - x86-32
 
-## Failed tests
-- tls-bss-g++
-- tls-bss-gcc
 
 ## Test with Docker
 ```
