@@ -1,5 +1,5 @@
 #! /bin/bash -eu
 
-g++ -o main main.cc
-../../build/sold main -o main.out --section-headers
-./main.out
+g++ -o main.out main.cc
+../../build/sold main.out -o main.soldout --section-headers
+./main.soldout
