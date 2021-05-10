@@ -48,10 +48,13 @@ Options
 - TLS in executables
 - AArch64
 - x86-32
+- Fedora linux
+- Test using other practical libraries than pybind
 
 
 ## Test with Docker
 ```
 sudo docker build -f ubuntu18.04.Dockerfile .
 sudo docker build -f ubuntu20.04.Dockerfile .
+sudo docker build -f fedora-latest.Dockerfile .
 ```
