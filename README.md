@@ -46,11 +46,24 @@ Options
 # For developers
 ## TODO
 - TLS in executables
+    - Initial exec and local exec
 - AArch64
 - x86-32
 - Fedora linux
 - Test using other practical libraries than pybind
 
+## Integration test with practical libraries
+### pybind test
+The purpose of this test is to check `sold` can preserve the complex ABI.
+```bash
+git clone https://github.com/shinh/sold.git
+cd sold
+mkdir -p build
+cd build
+cmake .. -DSOLD_PYBIND_TEST=ON
+make
+ctest
+```
 
 ## Test with Docker
 ```
