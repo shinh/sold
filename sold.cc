@@ -384,9 +384,8 @@ uintptr_t Sold::TLSMemSize() const {
 void Sold::DecideMemOffset() {
     uintptr_t offset = 0x10000000;
     for (ELFBinary* bin : link_binaries_) {
-        const Range range = bin->GetRange() + offset - bin->GetRange().start;
-        CHECK(range.start == offset) << SOLD_LOG_BITS(range.start) << SOLD_LOG_BITS(offset);
-        offsets_.emplace(bin, range.start);
+        const Range range = bin->GetRange() + offset;
+        offsets_.emplace(bin, offset);
         LOG(INFO) << "Assigned: " << bin->soname() << " " << HexString(range.start, 8) << "-" << HexString(range.end, 8);
         offset = range.end;
     }
