@@ -385,7 +385,8 @@ void Sold::DecideMemOffset() {
     uintptr_t offset = 0x10000000;
     for (ELFBinary* bin : link_binaries_) {
         const Range range = bin->GetRange() + offset;
-        offsets_.emplace(bin, offset);
+        CHECK(range.start == offset) << "sold cannot handle other than shared objects.";
+        offsets_.emplace(bin, range.start);
         LOG(INFO) << "Assigned: " << bin->soname() << " " << HexString(range.start, 8) << "-" << HexString(range.end, 8);
         offset = range.end;
     }
