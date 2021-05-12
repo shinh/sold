@@ -31,6 +31,7 @@
 ELFBinary::ELFBinary(const std::string& filename, int fd, char* head, size_t size)
     : filename_(filename), fd_(fd), head_(head), size_(size) {
     ehdr_ = reinterpret_cast<Elf_Ehdr*>(head);
+    CHECK_EQ(ehdr_->e_type, ET_DYN);
 
     {
         size_t found = filename.rfind('/');
