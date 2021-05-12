@@ -85,4 +85,15 @@ if(BUILD_TESTING)
             COMMAND ${CMAKE_CURRENT_BINARY_DIR}/tests/test_${t}_out
             )
     endforeach()
+    add_test(
+        NAME c++_features_test
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+        COMMAND run-all-tests.sh
+        )
+endif()
+
+if(SOLD_PYBIND_TEST)
+    get_third_party(pybind11)
+    add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/pybind11 ${CMAKE_CURRENT_BINARY_DIR}/pybind11 EXCLUDE_FROM_ALL)
+    add_subdirectory(pybind_test)
 endif()
