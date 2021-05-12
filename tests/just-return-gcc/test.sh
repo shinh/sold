@@ -1,5 +1,5 @@
 #! /bin/bash
 
-gcc return.c -o return
-../../build/sold return -o return.out --section-headers --check-output
-./return.out
+gcc return.c -o return.out
+../../build/sold return.out -o return.soldout --section-headers --check-output
+./return.soldout

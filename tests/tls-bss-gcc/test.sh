@@ -1,6 +1,6 @@
 #! /bin/bash -eu
 
-gcc -Wl,--hash-style=gnu -o main main.c
+gcc -Wl,--hash-style=gnu -o main.out main.c
 
-../../build/sold main -o main.out --section-headers
-./main.out
+../../build/sold main.out -o main.soldout --section-headers
+./main.soldout
