@@ -572,6 +572,11 @@ Elf_Addr ELFBinary::OffsetFromAddr(Elf_Addr addr) const {
             return addr - phdr->p_vaddr + phdr->p_offset;
         }
     }
+    if (tls() != nullptr) {
+        if (tls()->p_vaddr <= addr && addr < tls()->p_vaddr + tls()->p_memsz) {
+            return addr - tls()->p_vaddr + tls()->p_offset;
+        }
+    }
     LOG(FATAL) << "Address " << HexString(addr, 16) << " cannot be resolved";
 }
 
@@ -579,6 +584,13 @@ Elf_Addr ELFBinary::AddrFromOffset(Elf_Addr offset) const {
     for (Elf_Phdr* phdr : loads_) {
         if (phdr->p_offset <= offset && offset < phdr->p_offset + phdr->p_filesz) {
             return offset - phdr->p_offset + phdr->p_vaddr;
+        }
+    }
+    if (tls() != nullptr) {
+        // I use `<=` in `offset <= tls()->p_offset + tls()->p_filesz` because
+        // `tls()->p_filesz` is 0 when no TLS variables have initial value.
+        if (tls()->p_offset <= offset && offset <= tls()->p_offset + tls()->p_filesz) {
+            return offset - tls()->p_offset + tls()->p_vaddr;
         }
     }
     LOG(FATAL) << "Offset " << HexString(offset, 16) << " cannot be resolved";
