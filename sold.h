@@ -350,7 +350,6 @@ private:
 
     void RelocateBinary(ELFBinary* bin) {
         CHECK(bin->symtab());
-        CHECK(bin->rel());
         RelocateSymbols(bin, bin->rel(), bin->num_rels());
         RelocateSymbols(bin, bin->plt_rel(), bin->num_plt_rels());
     }
