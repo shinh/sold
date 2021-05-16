@@ -64,6 +64,13 @@ cmake .. -DSOLD_PYBIND_TEST=ON
 make
 ctest
 ```
+## libtorch test
+```
+mkdir -p build
+cd build
+cmake -DCMAKE_PREFIX_PATH=/absolute/path/to/libtorch/dir -DSOLD_LIBTORCH_TEST=ON -GNinja ..
+ninja
+```
 
 ## Test with Docker
 ```

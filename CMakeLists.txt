@@ -97,3 +97,7 @@ if(SOLD_PYBIND_TEST)
     add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/pybind11 ${CMAKE_CURRENT_BINARY_DIR}/pybind11 EXCLUDE_FROM_ALL)
     add_subdirectory(pybind_test)
 endif()
+
+if(SOLD_LIBTORCH_TEST)
+    add_subdirectory(libtorch_test)
+endif()
