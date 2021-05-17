@@ -350,12 +350,12 @@ private:
 
     void RelocateBinary(ELFBinary* bin) {
         CHECK(bin->symtab());
-        CHECK(bin->rel());
         RelocateSymbols(bin, bin->rel(), bin->num_rels());
         RelocateSymbols(bin, bin->plt_rel(), bin->num_plt_rels());
     }
 
     void RelocateSymbols(ELFBinary* bin, const Elf_Rel* rels, size_t num) {
+        if (!rels) CHECK_EQ(0, num);
         uintptr_t offset = offsets_[bin];
         for (size_t i = 0; i < num; ++i) {
             // TODO(hamaji): Support non-x86-64 architectures.
