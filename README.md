@@ -45,12 +45,12 @@ Options
 
 # For developers
 ## TODO
+- Executables
 - TLS in executables
     - Initial exec and local exec
 - AArch64
 - x86-32
-- Fedora linux
-- Test using other practical libraries than pybind
+- Test Fedora linux in CI
 
 ## Integration test with practical libraries
 ### pybind test
