@@ -30,11 +30,24 @@ public:
         offsets.emplace_back(offset);
         sizes.emplace_back(size);
     }
-    uintptr_t Size() const { return sizeof(memprotect_body_code) * offsets.size() + sizeof(memprotect_end_code); }
+    uintptr_t Size() const {
+        CHECK(offsets.size() == sizes.size());
+        if (machine_type_ == EM_X86_64) {
+            return sizeof(memprotect_body_code_x86_64) * offsets.size() + sizeof(memprotect_end_code_x86_64);
+        } else if (machine_type_ == EM_AARCH64) {
+            return body_code_length_aarch64 * offsets.size() + ret_code_length_aarch64;
+        } else {
+            CHECK(false) << SOLD_LOG_KEY(machine_type_) << " is not supported.";
+        }
+    }
     void Emit(FILE* fp, uintptr_t mprotect_code_offset) {
         CHECK(machine_type_ == EM_X86_64 || machine_type_ == EM_AARCH64) << "SetMachineType before Emit";
         if (machine_type_ == EM_X86_64) {
             EmitX86_64(fp, mprotect_code_offset);
+        } else if (machine_type_ == EM_AARCH64) {
+            EmitAarch64(fp, mprotect_code_offset);
+        } else {
+            CHECK(false) << SOLD_LOG_KEY(machine_type_) << " is not supported.";
         }
     }
 
@@ -63,8 +76,15 @@ public:
     // ret
     static constexpr uint8_t memprotect_end_code_x86_64[] = {0xc3};
 
+    // ret
+    static constexpr uint8_t memprotect_end_code_aarch64[] = {0xc0, 0x03, 0x5f, 0xd6};
+
+    static constexpr int body_code_length_aarch64 = 13 * 4;
+    static constexpr int ret_code_length_aarch64 = 4;
+
 private:
     void EmitX86_64(FILE* fp, uintptr_t mprotect_code_offset);
+    void EmitAarch64(FILE* fp, uintptr_t mprotect_code_offset);
     Elf64_Half machine_type_;
     std::vector<int64_t> offsets;
     std::vector<uint32_t> sizes;
