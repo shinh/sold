@@ -22,6 +22,10 @@
 
 class MprotectBuilder {
 public:
+    void SetMachineType(const Elf64_Half machine_type) {
+        CHECK(machine_type == EM_X86_64 || machine_type == EM_AARCH64);
+        machine_type_ = machine_type;
+    }
     void Add(uintptr_t offset, uintptr_t size) {
         offsets.emplace_back(offset);
         sizes.emplace_back(size);
@@ -77,6 +81,7 @@ public:
     static constexpr uint8_t memprotect_end_code[] = {0xc3};
 
 private:
+    Elf64_Half machine_type_;
     std::vector<int64_t> offsets;
     std::vector<uint32_t> sizes;
 };
