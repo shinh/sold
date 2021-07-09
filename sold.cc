@@ -768,6 +768,31 @@ void Sold::RelocateSymbol_aarch64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t 
             break;
         }
 
+        case R_AARCH64_TLSDESC: {
+            const std::string name = bin->Str(sym->st_name);
+            if (name == "") {
+                LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in local dynamic";
+                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                newrel.r_info = ELF_R_INFO(index, type);
+                const bool is_bss = bin->IsOffsetInTLSBSS(newrel.r_addend);
+                if (is_bss) {
+                    LOG(INFO) << "R_AARCH64_TLSDESC" << SOLD_LOG_BITS(newrel.r_addend)
+                              << SOLD_LOG_BITS(tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz);
+                    newrel.r_addend += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
+                } else {
+                    LOG(INFO) << "R_AARCH64_TLSDESC" << SOLD_LOG_BITS(newrel.r_addend)
+                              << SOLD_LOG_BITS(tls_.data[tls_.bin_to_index[bin]].file_offset);
+                    newrel.r_addend += tls_.data[tls_.bin_to_index[bin]].file_offset;
+                }
+                break;
+            } else {
+                LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in generic dynamic";
+                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                newrel.r_info = ELF_R_INFO(index, type);
+                break;
+            }
+        }
+
         case R_AARCH64_COPY: {
             const std::string name = bin->Str(sym->st_name);
             uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
