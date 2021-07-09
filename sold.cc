@@ -771,7 +771,7 @@ void Sold::RelocateSymbol_aarch64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t 
         case R_AARCH64_TLSDESC: {
             const std::string name = bin->Str(sym->st_name);
             if (name == "") {
-                LOG(INFO) << "R_AARCH64_TLSDESC in local dynamic";
+                LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in local dynamic";
                 uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
                 newrel.r_info = ELF_R_INFO(index, type);
                 const bool is_bss = bin->IsOffsetInTLSBSS(newrel.r_addend);
@@ -786,7 +786,7 @@ void Sold::RelocateSymbol_aarch64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t 
                 }
                 break;
             } else {
-                LOG(INFO) << "R_AARCH64_TLSDESC in generic dynamic";
+                LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in generic dynamic";
                 uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
                 newrel.r_info = ELF_R_INFO(index, type);
                 break;
