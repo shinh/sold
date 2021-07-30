@@ -92,8 +92,8 @@ public:
 
     std::pair<std::string, std::string> GetVersion(int index, const std::map<std::string, std::string>& filename_to_soname);
 
-    Elf_Addr OffsetFromAddr(Elf_Addr addr) const;
-    Elf_Addr AddrFromOffset(Elf_Addr offset) const;
+    Elf_Addr OffsetFromAddr(const Elf_Addr addr) const;
+    Elf_Addr AddrFromOffset(const Elf_Addr offset) const;
 
 private:
     void ParsePhdrs();

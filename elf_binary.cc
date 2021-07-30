@@ -569,7 +569,7 @@ void ELFBinary::ParseFuncArray(uintptr_t* array, uintptr_t size, std::vector<uin
     }
 }
 
-Elf_Addr ELFBinary::OffsetFromAddr(Elf_Addr addr) const {
+Elf_Addr ELFBinary::OffsetFromAddr(const Elf_Addr addr) const {
     for (Elf_Phdr* phdr : loads_) {
         if (phdr->p_vaddr <= addr && addr < phdr->p_vaddr + phdr->p_memsz) {
             return addr - phdr->p_vaddr + phdr->p_offset;
@@ -581,7 +581,7 @@ Elf_Addr ELFBinary::OffsetFromAddr(Elf_Addr addr) const {
     LOG(FATAL) << "Address " << HexString(addr, 16) << " cannot be resolved";
 }
 
-Elf_Addr ELFBinary::AddrFromOffset(Elf_Addr offset) const {
+Elf_Addr ELFBinary::AddrFromOffset(const Elf_Addr offset) const {
     for (Elf_Phdr* phdr : loads_) {
         if (phdr->p_offset <= offset && offset < phdr->p_offset + phdr->p_filesz) {
             return offset - phdr->p_offset + phdr->p_vaddr;
