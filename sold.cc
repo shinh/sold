@@ -98,12 +98,12 @@ void Sold::Emit(const std::string& out_filename) {
     CHECK(fp);
     Write(fp, ehdr_);
     EmitPhdrs(fp);
+    EmitArrays(fp);
     EmitGnuHash(fp);
     EmitSymtab(fp);
     EmitVersym(fp);
     EmitVerneed(fp);
     EmitRel(fp);
-    EmitArrays(fp);
     EmitStrtab(fp);
     EmitDynamic(fp);
     EmitShstrtab(fp);
@@ -169,27 +169,23 @@ void Sold::BuildLoads() {
 }
 
 void Sold::BuildArrays() {
-    size_t orig_rel_size = rels_.size();
-    for (size_t i = 0; i < init_array_.size() + fini_array_.size(); ++i) {
-        rels_.push_back(Elf_Rel{});
-    }
-
     std::vector<uintptr_t> array = init_array_;
     std::copy(fini_array_.begin(), fini_array_.end(), std::back_inserter(array));
-    for (size_t i = 0; i < array.size(); ++i) {
-        size_t rel_index = orig_rel_size + i;
-        CHECK(rel_index < rels_.size());
-        Elf_Rel* rel = &rels_[rel_index];
-        rel->r_offset = InitArrayOffset() + sizeof(uintptr_t) * i;
-        if (machine_type == EM_X86_64) {
-            rel->r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-        } else if (machine_type == EM_AARCH64) {
-            rel->r_info = ELF_R_INFO(0, R_AARCH64_RELATIVE);
-        } else {
-            CHECK(false);
-        }
-        rel->r_addend = array[i];
+
+    // We must emit a relocation because the first element of init_array_ is
+    // mprotect_offset_.
+    CHECK_GE(init_array_.size(), 1);
+    Elf_Rel mprotect_rel;
+    if (machine_type == EM_X86_64) {
+        mprotect_rel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+    } else if (machine_type == EM_AARCH64) {
+        mprotect_rel.r_info = ELF_R_INFO(0, R_AARCH64_RELATIVE);
+    } else {
+        CHECK(false);
     }
+    mprotect_rel.r_offset = InitArrayOffset();
+    mprotect_rel.r_addend = array[0];
+    rels_.emplace_back(mprotect_rel);
 }
 
 void Sold::BuildDynamic() {
@@ -438,20 +434,20 @@ void Sold::CollectTLS() {
 
 // Collect .init_array and .fini_array
 void Sold::CollectArrays() {
+    init_array_.emplace_back(mprotect_offset_);
     for (auto iter = link_binaries_.rbegin(); iter != link_binaries_.rend(); ++iter) {
         ELFBinary* bin = *iter;
         uintptr_t offset = offsets_[bin];
+        bin_to_init_array_offset_[bin] = InitArrayOffset() + sizeof(uintptr_t) * init_array_.size();
         for (uintptr_t ptr : bin->init_array()) {
             init_array_.emplace_back(ptr + offset);
         }
     }
-    // TODO(akawashiro) In case of executables, this code causes SEGV. I don't
-    // kwow the reason.
-    if (!is_executable_) init_array_.emplace_back(mprotect_offset_);
     for (ELFBinary* bin : link_binaries_) {
         uintptr_t offset = offsets_[bin];
         if (std::any_of(exclude_finis_.cbegin(), exclude_finis_.cend(), [bin](const auto s) { return HasPrefix(bin->soname(), s); }))
             continue;
+        bin_to_fini_array_offset_[bin] = FiniArrayOffset() + sizeof(uintptr_t) * fini_array_.size();
         for (uintptr_t ptr : bin->fini_array()) {
             fini_array_.emplace_back(ptr + offset);
         }
@@ -559,154 +555,186 @@ void Sold::RelocateSymbol_x86_64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t o
 
     int type = ELF_R_TYPE(rel->r_info);
     const uintptr_t addend = rel->r_addend;
-    Elf_Rel newrel = *rel;
+    std::vector<Elf_Rel> newrels;
+
     if (bin->IsVaddrInTLSData(rel->r_offset)) {
+        Elf_Rel newrel = *rel;
         const Elf_Phdr* tls = bin->tls();
         CHECK(tls);
         uintptr_t off = newrel.r_offset - tls->p_vaddr;
         off = RemapTLS("reloc", bin, off);
         newrel.r_offset = off + tls_offset_;
+        newrels.emplace_back(newrel);
     } else {
+        Elf_Rel newrel = *rel;
         newrel.r_offset += offset;
+        newrels.emplace_back(newrel);
+    }
+
+    if (bin->IsAddrInInitarray(rel->r_offset)) {
+        Elf_Rel newrel = *rel;
+        CHECK(bin_to_init_array_offset_.find(bin) != bin_to_init_array_offset_.end()) << SOLD_LOG_KEY(bin->filename());
+
+        newrel.r_offset -= bin->init_array_addr();
+        newrel.r_offset += bin_to_init_array_offset_[bin];
+        LOG(INFO) << SOLD_LOG_BITS(bin->init_array_addr()) << SOLD_LOG_BITS(bin_to_init_array_offset_[bin])
+                  << SOLD_LOG_BITS(newrel.r_offset) << SOLD_LOG_BITS(newrel.r_addend) << SOLD_LOG_BITS(offset);
+        newrels.emplace_back(newrel);
+    } else if (bin->IsAddrInFiniarray(rel->r_offset)) {
+        Elf_Rel newrel = *rel;
+        CHECK(bin_to_fini_array_offset_.find(bin) != bin_to_fini_array_offset_.end()) << SOLD_LOG_KEY(bin->filename());
+
+        newrel.r_offset -= bin->fini_array_addr();
+        newrel.r_offset += bin_to_fini_array_offset_[bin];
+        LOG(INFO) << SOLD_LOG_BITS(bin->fini_array_addr()) << SOLD_LOG_BITS(bin_to_fini_array_offset_[bin])
+                  << SOLD_LOG_BITS(newrel.r_offset) << SOLD_LOG_BITS(newrel.r_addend) << SOLD_LOG_BITS(offset);
+        newrels.emplace_back(newrel);
     }
 
     LOG(INFO) << "Relocate " << bin->Str(sym->st_name) << " at " << rel->r_offset;
 
-    // Even if we found a defined symbol in src_syms_, we cannot
-    // erase the relocation entry. The address needs to be fixed at
-    // runtime by ASLR function so we set RELATIVE to these resolved symbols.
-    switch (type) {
-        case R_X86_64_RELATIVE: {
-            if (IsDefined(*sym)) {
-                LOG(WARNING) << "The symbol associated with R_X86_64_RELATIVE is defined. Because this relocation type doesn't need any "
-                                "symbol, something wrong may have happened.";
-            }
-            newrel.r_addend += offset;
-            break;
-        }
-
-        case R_X86_64_GLOB_DAT:
-        case R_X86_64_JUMP_SLOT: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
-                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-                newrel.r_addend = val_or_index;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
-            }
-            break;
-        }
-
-        case R_X86_64_64: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
-                newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
-                newrel.r_addend += val_or_index;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
-            }
-            break;
-        }
-
-        // TODO(akawashiro) Handle TLS variables in executables.
-        case R_X86_64_DTPMOD64: {
-            // TODO(akawashiro) Refactor out for Arch64
-            const std::string name = bin->Str(sym->st_name);
-            uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
-            newrel.r_info = ELF_R_INFO(index, type);
-
-            if (bin->tls() == NULL) {
-                LOG(INFO) << SOLD_LOG_64BITS(bin->tls()) << " is null. This relocation is TLS generic dynamic model.";
-                break;
-            }
-
-            uint64_t* mod_on_got =
-                const_cast<uint64_t*>(reinterpret_cast<const uint64_t*>(bin->head() + bin->OffsetFromAddr(rel->r_offset)));
-            uint64_t* offset_on_got = mod_on_got + 1;
-            const bool is_bss = bin->IsOffsetInTLSBSS(*offset_on_got);
-
-            // We assume dl_tls_index exists in GOT. This struct is used as
-            // the argument of __tls_get_addr.
-            //
-            // typedef struct dl_tls_index
-            // {
-            //   uint64_t ti_module; <--- mod_on_got
-            //   uint64_t ti_offset; <--- offset_on_got
-            // } tls_index;
-            //
-            // In TLS generic dynamic model, both ti_module and ti_offset are
-            // rewritten by R_X86_64_DTPMOD64 and R_X86_64_DTPOFF64,
-            // respectively.
-            //
-            // In TLS local dynamic model, the only ti_module is rewrite by
-            // R_X86_64_DTPMOD64 and ti_offset is fixed in the link process. We
-            // must rewrite the fixed ti_offset because we remap the TLS
-            // template.
-
-            std::vector<int> rewrite_rel_types;  // Type of relocations which rewrite ti_module.
-            for (size_t i = 0; i < bin->num_rels(); ++i) {
-                if (rel->r_offset + sizeof(uint64_t) <= bin->rel()[i].r_offset &&
-                    bin->rel()[i].r_offset < rel->r_offset + sizeof(uint64_t) + sizeof(uint64_t)) {
-                    rewrite_rel_types.emplace_back(ELF_R_TYPE(bin->rel()[i].r_info));
+    for (auto newrel : newrels) {
+        // Even if we found a defined symbol in src_syms_, we cannot
+        // erase the relocation entry. The address needs to be fixed at
+        // runtime by ASLR function so we set RELATIVE to these resolved symbols.
+        switch (type) {
+            case R_X86_64_RELATIVE: {
+                if (IsDefined(*sym)) {
+                    LOG(WARNING)
+                        << "The symbol associated with R_X86_64_RELATIVE is defined. Because this relocation type doesn't need any "
+                           "symbol, something wrong may have happened.";
                 }
-            }
-
-            CHECK(rewrite_rel_types.size() == 0 || (rewrite_rel_types.size() == 1 && rewrite_rel_types[0] == R_X86_64_DTPOFF64))
-                << SOLD_LOG_KEY(rewrite_rel_types.size()) << SOLD_LOG_KEY(ShowRelocationType(rewrite_rel_types[0]));
-
-            if (rewrite_rel_types.size() == 1) {
-                LOG(INFO) << "R_X86_64_DTPOFF64 exists next to R_X86_64_DTPMOD64. This relocation is TLS generic dynamic model.";
+                newrel.r_addend += offset;
                 break;
             }
 
-            LOG(INFO) << "R_X86_64_DTPMOD64 relocation in TLS local dynamic model. " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
-                      << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset)) << SOLD_LOG_64BITS(*mod_on_got)
-                      << SOLD_LOG_64BITS(*offset_on_got) << SOLD_LOG_64BITS(bin->tls()->p_filesz) << SOLD_LOG_KEY(is_bss)
-                      << SOLD_LOG_64BITS(tls_.data[tls_.bin_to_index[bin]].file_offset)
-                      << SOLD_LOG_64BITS(tls_.data[tls_.bin_to_index[bin]].bss_offset);
-
-            CHECK(ELF_R_SYM(rel->r_info) == 0)
-                << "The symbol associated with R_X86_64_DTPMOD64 in TLS local dynamic model should be the dummy.";
-
-            if (is_bss) {
-                // TLS variables without initial values are remapped from
-                // [bin->tls()->p_filesz, bin->tls()->p_memsz) to
-                // [tls_.data[tls_.bin_to_index[bin]].bss_offset,
-                //  tls_.data[tls_.bin_to_index[bin]].bss_offset + bin->tls()->p_memsz - bin->tls()->p_filesz)
-                *offset_on_got += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
-            } else {
-                // TLS variables with initial values are remapped from
-                // [0, bin->tls()->p_filesz) to
-                // [tls_.data[tls_.bin_to_index[bin]].file_offset,
-                //  tls_.data[tls_.bin_to_index[bin]].file_offset + bin->tls()->p_filesz)
-                *offset_on_got += tls_.data[tls_.bin_to_index[bin]].file_offset;
+            case R_X86_64_GLOB_DAT:
+            case R_X86_64_JUMP_SLOT: {
+                uintptr_t val_or_index;
+                if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
+                    newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                    newrel.r_addend = val_or_index;
+                } else {
+                    newrel.r_info = ELF_R_INFO(val_or_index, type);
+                }
+                break;
             }
-            break;
+
+            case R_X86_64_64: {
+                uintptr_t val_or_index;
+                if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
+                    newrel.r_info = ELF_R_INFO(0, R_X86_64_RELATIVE);
+                    newrel.r_addend += val_or_index;
+                } else {
+                    newrel.r_info = ELF_R_INFO(val_or_index, type);
+                }
+                break;
+            }
+
+            // TODO(akawashiro) Handle TLS variables in executables.
+            case R_X86_64_DTPMOD64: {
+                // TODO(akawashiro) Refactor out for Arch64
+                const std::string name = bin->Str(sym->st_name);
+                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                newrel.r_info = ELF_R_INFO(index, type);
+
+                if (bin->tls() == NULL) {
+                    LOG(INFO) << SOLD_LOG_64BITS(bin->tls()) << " is null. This relocation is TLS generic dynamic model.";
+                    break;
+                }
+
+                uint64_t* mod_on_got =
+                    const_cast<uint64_t*>(reinterpret_cast<const uint64_t*>(bin->head() + bin->OffsetFromAddr(rel->r_offset)));
+                uint64_t* offset_on_got = mod_on_got + 1;
+                const bool is_bss = bin->IsOffsetInTLSBSS(*offset_on_got);
+
+                // We assume dl_tls_index exists in GOT. This struct is used as
+                // the argument of __tls_get_addr.
+                //
+                // typedef struct dl_tls_index
+                // {
+                //   uint64_t ti_module; <--- mod_on_got
+                //   uint64_t ti_offset; <--- offset_on_got
+                // } tls_index;
+                //
+                // In TLS generic dynamic model, both ti_module and ti_offset are
+                // rewritten by R_X86_64_DTPMOD64 and R_X86_64_DTPOFF64,
+                // respectively.
+                //
+                // In TLS local dynamic model, the only ti_module is rewrite by
+                // R_X86_64_DTPMOD64 and ti_offset is fixed in the link process. We
+                // must rewrite the fixed ti_offset because we remap the TLS
+                // template.
+
+                std::vector<int> rewrite_rel_types;  // Type of relocations which rewrite ti_module.
+                for (size_t i = 0; i < bin->num_rels(); ++i) {
+                    if (rel->r_offset + sizeof(uint64_t) <= bin->rel()[i].r_offset &&
+                        bin->rel()[i].r_offset < rel->r_offset + sizeof(uint64_t) + sizeof(uint64_t)) {
+                        rewrite_rel_types.emplace_back(ELF_R_TYPE(bin->rel()[i].r_info));
+                    }
+                }
+
+                CHECK(rewrite_rel_types.size() == 0 || (rewrite_rel_types.size() == 1 && rewrite_rel_types[0] == R_X86_64_DTPOFF64))
+                    << SOLD_LOG_KEY(rewrite_rel_types.size()) << SOLD_LOG_KEY(ShowRelocationType(rewrite_rel_types[0]));
+
+                if (rewrite_rel_types.size() == 1) {
+                    LOG(INFO) << "R_X86_64_DTPOFF64 exists next to R_X86_64_DTPMOD64. This relocation is TLS generic dynamic model.";
+                    break;
+                }
+
+                LOG(INFO) << "R_X86_64_DTPMOD64 relocation in TLS local dynamic model. " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
+                          << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset)) << SOLD_LOG_64BITS(*mod_on_got)
+                          << SOLD_LOG_64BITS(*offset_on_got) << SOLD_LOG_64BITS(bin->tls()->p_filesz) << SOLD_LOG_KEY(is_bss)
+                          << SOLD_LOG_64BITS(tls_.data[tls_.bin_to_index[bin]].file_offset)
+                          << SOLD_LOG_64BITS(tls_.data[tls_.bin_to_index[bin]].bss_offset);
+
+                // We cannot determine whether the associated symbol is a dummy or
+                // not just using its index. In addition to the traditional dummy
+                // symbol at index 0, I found some compilers emit a dummy symbol at
+                // index 1 of SECTION type.
+                CHECK_EQ(name, "") << "The symbol associated with R_X86_64_DTPMOD64 in TLS local dynamic model should be the dummy."
+                                   << SOLD_LOG_KEY(bin->filename());
+
+                if (is_bss) {
+                    // TLS variables without initial values are remapped from
+                    // [bin->tls()->p_filesz, bin->tls()->p_memsz) to
+                    // [tls_.data[tls_.bin_to_index[bin]].bss_offset,
+                    //  tls_.data[tls_.bin_to_index[bin]].bss_offset + bin->tls()->p_memsz - bin->tls()->p_filesz)
+                    *offset_on_got += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
+                } else {
+                    // TLS variables with initial values are remapped from
+                    // [0, bin->tls()->p_filesz) to
+                    // [tls_.data[tls_.bin_to_index[bin]].file_offset,
+                    //  tls_.data[tls_.bin_to_index[bin]].file_offset + bin->tls()->p_filesz)
+                    *offset_on_got += tls_.data[tls_.bin_to_index[bin]].file_offset;
+                }
+                break;
+            }
+
+            case R_X86_64_DTPOFF64:
+            case R_X86_64_TPOFF64: {
+                const std::string name = bin->Str(sym->st_name);
+                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                newrel.r_info = ELF_R_INFO(index, type);
+                LOG(INFO) << ShowRelocationType(type) << " relocation: " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
+                          << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset));
+                break;
+            }
+
+            case R_X86_64_COPY: {
+                const std::string name = bin->Str(sym->st_name);
+                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                newrel.r_info = ELF_R_INFO(index, type);
+                break;
+            }
+
+            default:
+                LOG(FATAL) << "Unknown relocation type: " << ShowRelocationType(type);
+                CHECK(false);
         }
 
-        case R_X86_64_DTPOFF64:
-        case R_X86_64_TPOFF64: {
-            const std::string name = bin->Str(sym->st_name);
-            uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
-            newrel.r_info = ELF_R_INFO(index, type);
-            LOG(INFO) << ShowRelocationType(type) << " relocation: " << SOLD_LOG_KEY(*rel) << SOLD_LOG_KEY(newrel)
-                      << SOLD_LOG_64BITS(bin->OffsetFromAddr(rel->r_offset));
-            break;
-        }
-
-        case R_X86_64_COPY: {
-            const std::string name = bin->Str(sym->st_name);
-            uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
-            newrel.r_info = ELF_R_INFO(index, type);
-            break;
-        }
-
-        default:
-            LOG(FATAL) << "Unknown relocation type: " << ShowRelocationType(type);
-            CHECK(false);
+        rels_.push_back(newrel);
     }
-
-    rels_.push_back(newrel);
 }
 
 // Make new relocation table.
@@ -719,93 +747,121 @@ void Sold::RelocateSymbol_aarch64(ELFBinary* bin, const Elf_Rel* rel, uintptr_t 
 
     int type = ELF_R_TYPE(rel->r_info);
     const uintptr_t addend = rel->r_addend;
-    Elf_Rel newrel = *rel;
+    std::vector<Elf_Rel> newrels;
+
     if (bin->IsVaddrInTLSData(rel->r_offset)) {
+        Elf_Rel newrel = *rel;
         const Elf_Phdr* tls = bin->tls();
         CHECK(tls);
         uintptr_t off = newrel.r_offset - tls->p_vaddr;
         off = RemapTLS("reloc", bin, off);
         newrel.r_offset = off + tls_offset_;
+        newrels.emplace_back(newrel);
     } else {
+        Elf_Rel newrel = *rel;
         newrel.r_offset += offset;
+        newrels.emplace_back(newrel);
+    }
+
+    if (bin->IsAddrInInitarray(rel->r_offset)) {
+        Elf_Rel newrel = *rel;
+        CHECK(bin_to_init_array_offset_.find(bin) != bin_to_init_array_offset_.end()) << SOLD_LOG_KEY(bin->filename());
+
+        newrel.r_offset -= bin->init_array_addr();
+        newrel.r_offset += bin_to_init_array_offset_[bin];
+        LOG(INFO) << SOLD_LOG_BITS(bin->init_array_addr()) << SOLD_LOG_BITS(bin_to_init_array_offset_[bin])
+                  << SOLD_LOG_BITS(newrel.r_offset) << SOLD_LOG_BITS(newrel.r_addend) << SOLD_LOG_BITS(offset);
+        newrels.emplace_back(newrel);
+    } else if (bin->IsAddrInFiniarray(rel->r_offset)) {
+        Elf_Rel newrel = *rel;
+        CHECK(bin_to_fini_array_offset_.find(bin) != bin_to_fini_array_offset_.end()) << SOLD_LOG_KEY(bin->filename());
+
+        newrel.r_offset -= bin->fini_array_addr();
+        newrel.r_offset += bin_to_fini_array_offset_[bin];
+        LOG(INFO) << SOLD_LOG_BITS(bin->fini_array_addr()) << SOLD_LOG_BITS(bin_to_fini_array_offset_[bin])
+                  << SOLD_LOG_BITS(newrel.r_offset) << SOLD_LOG_BITS(newrel.r_addend) << SOLD_LOG_BITS(offset);
+        newrels.emplace_back(newrel);
     }
 
     LOG(INFO) << "Relocate " << bin->Str(sym->st_name) << " at " << rel->r_offset;
 
-    // Even if we found a defined symbol in src_syms_, we cannot
-    // erase the relocation entry. The address needs to be fixed at
-    // runtime by ASLR function so we set RELATIVE to these resolved symbols.
-    switch (type) {
-        case R_AARCH64_RELATIVE: {
-            if (IsDefined(*sym)) {
-                LOG(WARNING) << "The symbol associated with R_AARCH64_RELATIVE is defined. Because this relocation type doesn't need any "
-                                "symbol, something wrong may have happened.";
+    for (auto newrel : newrels) {
+        // Even if we found a defined symbol in src_syms_, we cannot
+        // erase the relocation entry. The address needs to be fixed at
+        // runtime by ASLR function so we set RELATIVE to these resolved symbols.
+        switch (type) {
+            case R_AARCH64_RELATIVE: {
+                if (IsDefined(*sym)) {
+                    LOG(WARNING)
+                        << "The symbol associated with R_AARCH64_RELATIVE is defined. Because this relocation type doesn't need any "
+                           "symbol, something wrong may have happened.";
+                }
+                newrel.r_addend += offset;
+                break;
             }
-            newrel.r_addend += offset;
-            break;
-        }
 
-        case R_AARCH64_GLOB_DAT:
-        case R_AARCH64_JUMP_SLOT: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
-                newrel.r_info = ELF_R_INFO(0, R_AARCH64_RELATIVE);
-                newrel.r_addend = val_or_index;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
-            }
-            break;
-        }
-
-        case R_AARCH64_ABS64: {
-            uintptr_t val_or_index;
-            if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
-                newrel.r_info = ELF_R_INFO(0, R_AARCH64_RELATIVE);
-                newrel.r_addend += val_or_index;
-            } else {
-                newrel.r_info = ELF_R_INFO(val_or_index, type);
-            }
-            break;
-        }
-
-        case R_AARCH64_TLSDESC: {
-            const std::string name = bin->Str(sym->st_name);
-            if (name == "") {
-                LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in local dynamic";
-                uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
-                newrel.r_info = ELF_R_INFO(index, type);
-                const bool is_bss = bin->IsOffsetInTLSBSS(newrel.r_addend);
-                if (is_bss) {
-                    LOG(INFO) << "R_AARCH64_TLSDESC" << SOLD_LOG_BITS(newrel.r_addend)
-                              << SOLD_LOG_BITS(tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz);
-                    newrel.r_addend += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
+            case R_AARCH64_GLOB_DAT:
+            case R_AARCH64_JUMP_SLOT: {
+                uintptr_t val_or_index;
+                if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
+                    newrel.r_info = ELF_R_INFO(0, R_AARCH64_RELATIVE);
+                    newrel.r_addend = val_or_index;
                 } else {
-                    LOG(INFO) << "R_AARCH64_TLSDESC" << SOLD_LOG_BITS(newrel.r_addend)
-                              << SOLD_LOG_BITS(tls_.data[tls_.bin_to_index[bin]].file_offset);
-                    newrel.r_addend += tls_.data[tls_.bin_to_index[bin]].file_offset;
+                    newrel.r_info = ELF_R_INFO(val_or_index, type);
                 }
                 break;
-            } else {
-                LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in generic dynamic";
+            }
+
+            case R_AARCH64_ABS64: {
+                uintptr_t val_or_index;
+                if (syms_.Resolve(bin->Str(sym->st_name), soname, version_name, val_or_index)) {
+                    newrel.r_info = ELF_R_INFO(0, R_AARCH64_RELATIVE);
+                    newrel.r_addend += val_or_index;
+                } else {
+                    newrel.r_info = ELF_R_INFO(val_or_index, type);
+                }
+                break;
+            }
+
+            case R_AARCH64_TLSDESC: {
+                const std::string name = bin->Str(sym->st_name);
+                if (name == "") {
+                    LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in local dynamic";
+                    uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                    newrel.r_info = ELF_R_INFO(index, type);
+                    const bool is_bss = bin->IsOffsetInTLSBSS(newrel.r_addend);
+                    if (is_bss) {
+                        LOG(INFO) << "R_AARCH64_TLSDESC" << SOLD_LOG_BITS(newrel.r_addend)
+                                  << SOLD_LOG_BITS(tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz);
+                        newrel.r_addend += tls_.data[tls_.bin_to_index[bin]].bss_offset - bin->tls()->p_filesz;
+                    } else {
+                        LOG(INFO) << "R_AARCH64_TLSDESC" << SOLD_LOG_BITS(newrel.r_addend)
+                                  << SOLD_LOG_BITS(tls_.data[tls_.bin_to_index[bin]].file_offset);
+                        newrel.r_addend += tls_.data[tls_.bin_to_index[bin]].file_offset;
+                    }
+                    break;
+                } else {
+                    LOG(INFO) << SOLD_LOG_KEY(name) << "R_AARCH64_TLSDESC in generic dynamic";
+                    uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
+                    newrel.r_info = ELF_R_INFO(index, type);
+                    break;
+                }
+            }
+
+            case R_AARCH64_COPY: {
+                const std::string name = bin->Str(sym->st_name);
                 uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
                 newrel.r_info = ELF_R_INFO(index, type);
                 break;
             }
+
+            default:
+                LOG(FATAL) << "Unknown relocation type: " << ShowRelocationType(type);
+                CHECK(false);
         }
 
-        case R_AARCH64_COPY: {
-            const std::string name = bin->Str(sym->st_name);
-            uintptr_t index = syms_.ResolveCopy(name, soname, version_name);
-            newrel.r_info = ELF_R_INFO(index, type);
-            break;
-        }
-
-        default:
-            LOG(FATAL) << "Unknown relocation type: " << ShowRelocationType(type);
-            CHECK(false);
+        rels_.push_back(newrel);
     }
-
-    rels_.push_back(newrel);
 }
 
 std::string Sold::ResolveRunPathVariables(const ELFBinary* binary, const std::string& runpath) {
