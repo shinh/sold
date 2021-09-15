@@ -12,7 +12,9 @@ jobs:
     - name: Install requirements
       run: sudo apt install ninja-build g++-aarch64-linux-gnu qemu qemu-system-aarch64 qemu-user
     - name: Install Python packages
-      run: pip install pytest numpy
+      run: pip install pytest numpy cmake-format
+    - name: format
+      run: ./run-format.sh
     - name: CMake
       run: mkdir build && cd build && cmake -GNinja -DSOLD_PYBIND_TEST=ON ..
     - name: Build

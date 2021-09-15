@@ -44,6 +44,8 @@ Options
 - `--exclude-so`: Specify a shared object not to combine.
 
 # For developers
+Please run "./run-format.sh" before merging to master branch.
+
 ## TODO
 - Executables
 - TLS in executables
