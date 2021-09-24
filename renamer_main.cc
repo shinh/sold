@@ -87,7 +87,7 @@ void Rename(std::unique_ptr<ELFBinary> bin, std::string outfile, std::map<std::s
 
     std::vector<std::string> sym_names;
     for (int i : sym_indecies) {
-        Elf_Sym* s = bin->symtab() + i;
+        Elf_Sym* s = bin->symtab_mut() + i;
         std::string n = bin->Str(s->st_name);
         strtab_builder.Add(n);
         if (mapping.find(n) != mapping.end()) {
@@ -107,7 +107,7 @@ void Rename(std::unique_ptr<ELFBinary> bin, std::string outfile, std::map<std::s
         if (p.p_type == PT_DYNAMIC) {
             CHECK_EQ(p.p_filesz % sizeof(Elf_Dyn), 0);
             for (size_t i = 0; i < p.p_filesz / sizeof(Elf_Dyn); ++i) {
-                Elf_Dyn* dyn = const_cast<Elf_Dyn*>(reinterpret_cast<const Elf_Dyn*>(bin->head() + p.p_offset + sizeof(Elf_Dyn) * i));
+                Elf_Dyn* dyn = reinterpret_cast<Elf_Dyn*>(bin->head_mut() + p.p_offset + sizeof(Elf_Dyn) * i);
                 switch (dyn->d_tag) {
                     case DT_NEEDED:
                         LOG(INFO) << "Rewrite " << ShowDynamicEntryType(DT_NEEDED);
@@ -127,7 +127,7 @@ void Rename(std::unique_ptr<ELFBinary> bin, std::string outfile, std::map<std::s
     // Rewrite strings in version information
     for (int index : sym_indecies) {
         if (bin->verneed() && bin->versym() && !is_special_ver_ndx(bin->versym()[index])) {
-            Elf_Verneed* vn = bin->verneed();
+            Elf_Verneed* vn = bin->verneed_mut();
             for (int i = 0; i < bin->verneednum(); ++i) {
                 LOG(INFO) << "Elf_Verneed: " << SOLD_LOG_KEY(vn->vn_version) << SOLD_LOG_KEY(vn->vn_cnt)
                           << SOLD_LOG_KEY(bin->Str(vn->vn_file)) << SOLD_LOG_KEY(vn->vn_aux) << SOLD_LOG_KEY(vn->vn_next);
@@ -180,9 +180,9 @@ void Rename(std::unique_ptr<ELFBinary> bin, std::string outfile, std::map<std::s
     // Rewrite addresses
     if (phdr_insert_strategy == PhdrInsertStrategy::kPT_NOTE) {
         Elf_Phdr* victim_note = nullptr;
-        for (const Elf_Phdr* p : bin->phdrs()) {
+        for (Elf_Phdr* p : bin->phdrs_mut()) {
             if (p->p_type == PT_NOTE) {
-                victim_note = const_cast<Elf_Phdr*>(p);
+                victim_note = p;
             }
         }
 
@@ -195,7 +195,7 @@ void Rename(std::unique_ptr<ELFBinary> bin, std::string outfile, std::map<std::s
             if (p.p_type == PT_DYNAMIC) {
                 CHECK_EQ(p.p_filesz % sizeof(Elf_Dyn), 0);
                 for (size_t i = 0; i < p.p_filesz / sizeof(Elf_Dyn); ++i) {
-                    Elf_Dyn* dyn = const_cast<Elf_Dyn*>(reinterpret_cast<const Elf_Dyn*>(bin->head() + p.p_offset + sizeof(Elf_Dyn) * i));
+                    Elf_Dyn* dyn = reinterpret_cast<Elf_Dyn*>(bin->head_mut() + p.p_offset + sizeof(Elf_Dyn) * i);
                     switch (dyn->d_tag) {
                         case DT_STRTAB:
                             dyn->d_un.d_ptr = strtab_vaddr;

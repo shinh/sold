@@ -36,6 +36,7 @@ public:
 
     const Elf_Ehdr* ehdr() const { return ehdr_; }
     const std::vector<Elf_Phdr*> phdrs() const { return phdrs_; }
+    std::vector<Elf_Phdr*> phdrs_mut() const { return phdrs_; }
     const std::vector<Elf_Phdr*> loads() const { return loads_; }
     const Elf_Phdr* tls() const { return tls_; }
     const Elf_Phdr* gnu_stack() const { return gnu_stack_; }
@@ -46,9 +47,11 @@ public:
     const std::string& runpath() const { return runpath_; }
     const std::string& rpath() const { return rpath_; }
 
-    Elf_Sym* symtab() const { return symtab_; }
-    Elf_Verneed* verneed() const { return verneed_; }
-    Elf_Versym* versym() const { return versym_; }
+    const Elf_Sym* symtab() const { return symtab_; }
+    Elf_Sym* symtab_mut() const { return symtab_; }
+    const Elf_Verneed* verneed() const { return verneed_; }
+    Elf_Verneed* verneed_mut() const { return verneed_; }
+    const Elf_Versym* versym() const { return versym_; }
     const Elf_Xword verneednum() const { return verneednum_; }
     const Elf_Rel* rel() const { return rel_; }
     size_t num_rels() const { return num_rels_; }
@@ -58,6 +61,7 @@ public:
     const char* strtab() const { return strtab_; }
 
     const char* head() const { return head_; }
+    char* head_mut() const { return head_; }
     size_t filesize() const { return filesize_; }
     size_t mapped_size() const { return mapped_size_; }
 
