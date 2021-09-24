@@ -29,7 +29,6 @@ uintptr_t StrtabBuilder::Add(const std::string& s) {
     strtab_ += t;
     strtab_ += '\0';
     cache[t] = pos;
-    strs_.emplace_back(t);
     return pos;
 }
 

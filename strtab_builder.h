@@ -33,11 +33,9 @@ public:
     size_t size() const { return strtab_.size(); }
 
     const void* data() const { return strtab_.data(); }
-    const std::vector<std::string> strs() const { return strs_; }
 
 private:
     std::string strtab_;
-    std::vector<std::string> strs_;
     std::map<std::string, uintptr_t> cache;
     bool is_freezed_{false};
     std::map<std::string, std::string> rename_mapping_;
