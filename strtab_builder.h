@@ -17,9 +17,13 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 class StrtabBuilder {
 public:
+    StrtabBuilder() {}
+    StrtabBuilder(std::map<std::string, std::string> rename_mapping) : rename_mapping_(rename_mapping) {}
+
     uintptr_t Add(const std::string& s);
 
     uintptr_t GetPos(const std::string& s);
@@ -34,4 +38,5 @@ private:
     std::string strtab_;
     std::map<std::string, uintptr_t> cache;
     bool is_freezed_{false};
+    const std::map<std::string, std::string> rename_mapping_;
 };

@@ -21,7 +21,7 @@ shared objects. For example,
 ```
 
 ## Requirements
-`sold` works only on Linux on x86-64 architecture.
+`sold` works only on Linux on x86-64 and aarch64 architectures.
 
 ## How to build
 ```bash
@@ -43,6 +43,23 @@ Options
 - `--check-output`: Check integrity of the output by parsing it again.
 - `--exclude-so`: Specify a shared object not to combine.
 
+# Renamer
+`renamer` is software to rename symbols in shared objects.  You can rename symbols in shared objects like the following.
+```
+% cat mapping
+hoge fugafuga
+% renamer libhoge_original.so --output libhoge_renamed.so --rename-mapping-file mapping
+```
+
+## Requirements & How to build
+Just same as `sold`.
+
+## How to use
+```bash
+renamer [INPUT] --output [OUTPUT] --rename-mapping-file [MAPPING]
+```
+All lines in [MAPPING] must be a space separated pair of the old name of a symbol and the new name.
+
 # For developers
 Please run "./run-format.sh" before merging to master branch.
 
@@ -50,7 +67,6 @@ Please run "./run-format.sh" before merging to master branch.
 - Executables
 - TLS in executables
     - Initial exec and local exec
-- AArch64
 - x86-32
 - Test Fedora linux in CI
 
