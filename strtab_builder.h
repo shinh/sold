@@ -38,5 +38,5 @@ private:
     std::string strtab_;
     std::map<std::string, uintptr_t> cache;
     bool is_freezed_{false};
-    std::map<std::string, std::string> rename_mapping_;
+    const std::map<std::string, std::string> rename_mapping_;
 };

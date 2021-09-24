@@ -19,7 +19,8 @@
 
 uintptr_t StrtabBuilder::Add(const std::string& s) {
     std::string t = s;
-    if (rename_mapping_.find(s) != rename_mapping_.end()) t = rename_mapping_[s];
+    auto it = rename_mapping_.find(s);
+    if (it != rename_mapping_.end()) t = it->second;
 
     CHECK(!is_freezed_);
     if (cache.find(t) != cache.end()) {
@@ -34,7 +35,8 @@ uintptr_t StrtabBuilder::Add(const std::string& s) {
 
 uintptr_t StrtabBuilder::GetPos(const std::string& s) {
     std::string t = s;
-    if (rename_mapping_.find(s) != rename_mapping_.end()) t = rename_mapping_[s];
+    auto it = rename_mapping_.find(s);
+    if (it != rename_mapping_.end()) t = it->second;
 
     if (cache.find(t) != cache.end()) {
         return cache[t];
