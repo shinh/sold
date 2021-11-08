@@ -1,4 +1,7 @@
 # sold
+
+**NOTE**: The development is taken over by @akawashiro. Check out this repository instead: https://github.com/akawashiro/sold/
+
 `sold` is a linker software which links a shared objects and its depending
 shared objects. For example,
 ```bash
