@@ -72,6 +72,8 @@ target_link_libraries(print_ehframe sold_lib glog)
 
 add_subdirectory(tests)
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/feature_unit_tests DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_CURRENT_BINARY_DIR})
 include(CTest)
 
@@ -90,7 +92,7 @@ if(BUILD_TESTING)
     endforeach()
     add_test(
         NAME c++_features_test
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/feature_unit_tests"
         COMMAND run-all-tests.sh
         )
   add_test(
