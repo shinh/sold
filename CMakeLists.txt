@@ -74,6 +74,8 @@ add_subdirectory(tests)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/feature_unit_tests DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/renamer_test DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_CURRENT_BINARY_DIR})
 include(CTest)
 
@@ -97,7 +99,7 @@ if(BUILD_TESTING)
         )
   add_test(
     NAME renamer
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests/renamer"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/renamer_test"
     COMMAND test.sh)
 endif()
 
