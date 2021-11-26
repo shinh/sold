@@ -166,6 +166,18 @@ struct Syminfo {
     Elf_Sym* sym;
 };
 
+template <class T, class U>
+std::string ShowStdMap(std::map<T, U> ma) {
+    std::stringstream ss;
+    ss << "{";
+    for (const auto& kv : ma) {
+        ss << kv.first << ":" << kv.second << ",";
+    }
+    ss << "}";
+
+    return ss.str();
+}
+
 std::string ShowDynamicEntryType(int type);
 std::string ShowRelocationType(int type);
 std::string ShowDW_EH_PE(uint8_t type);
