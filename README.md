@@ -11,7 +11,7 @@ shared objects. For example,
 
 ## Branches
 - `master`: I am developing on this branch.
-- `stable`: Stable version of master for out internal use.
+- `stable`: Stable version of master for our internal use.
 
 ## Requirements
 `sold` works only on Linux on x86-64 and aarch64 architectures.
