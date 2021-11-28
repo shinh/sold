@@ -8,6 +8,7 @@ shared objects. For example,
 % ldd libhoge2.so
 %
 ```
+`sold` works only for shared objects not for executables. Sorry.
 
 ## Branches
 - `master`: I am developing on this branch.
