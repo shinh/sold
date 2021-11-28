@@ -3,29 +3,22 @@
 shared objects. For example,
 ```bash
 % ldd libhoge.so
-    linux-vdso.so.1 (0x00007ffee03bb000)
     libfuga.so (0x00007fb6550b2000)
-    libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fb654eb5000)
-    libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fb654cc3000)
-    libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fb654b74000)
-    /lib64/ld-linux-x86-64.so.2 (0x00007fb6550be000)
-    libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fb654b59000)
 % sold -i libhoge.so -o libhoge2.so
 % ldd libhoge2.so
-    /lib64/ld-linux-x86-64.so.2 (0x00007f78a666b000)
-    linux-vdso.so.1 (0x00007fffd89d1000)
-    libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f789644f000)
-    libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f7896434000)
-    libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f78962e5000)
-    libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f7896104000)
+%
 ```
+
+## Branches
+- `master`: I am developing on this branch.
+- `stable`: Stable version of master for out internal use.
 
 ## Requirements
 `sold` works only on Linux on x86-64 and aarch64 architectures.
 
 ## How to build
 ```bash
-git clone https://github.com/shinh/sold.git
+git clone https://github.com/akawashiro/sold.git
 cd sold
 mkdir -p build
 cd build
@@ -74,7 +67,7 @@ Please run "./run-format.sh" before merging to master branch.
 ### pybind test
 The purpose of this test is to check `sold` can preserve the complex ABI.
 ```bash
-git clone https://github.com/shinh/sold.git
+git clone https://github.com/akawashiro/sold.git
 cd sold
 mkdir -p build
 cd build
@@ -84,6 +77,8 @@ ctest
 ```
 ## libtorch test
 ```
+git clone https://github.com/akawashiro/sold.git
+cd sold
 mkdir -p build
 cd build
 cmake -DCMAKE_PREFIX_PATH=/absolute/path/to/libtorch/dir -DSOLD_LIBTORCH_TEST=ON -GNinja ..

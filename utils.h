@@ -142,6 +142,7 @@ void WriteBuf(FILE* fp, const void* buf, size_t size);
 void EmitZeros(FILE* fp, uintptr_t cnt);
 void EmitPad(FILE* fp, uintptr_t to);
 void EmitAlign(FILE* fp);
+void MemcpyFile(FILE* fp, uintptr_t offset, const void* src, size_t size);
 
 struct Range {
     uintptr_t start;
@@ -164,6 +165,18 @@ struct Syminfo {
     Elf_Versym versym;
     Elf_Sym* sym;
 };
+
+template <class T, class U>
+std::string ShowStdMap(std::map<T, U> ma) {
+    std::stringstream ss;
+    ss << "{";
+    for (const auto& kv : ma) {
+        ss << kv.first << ":" << kv.second << ",";
+    }
+    ss << "}";
+
+    return ss.str();
+}
 
 std::string ShowDynamicEntryType(int type);
 std::string ShowRelocationType(int type);

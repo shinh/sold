@@ -71,7 +71,7 @@ Range ELFBinary::GetRange() const {
 }
 
 bool ELFBinary::IsAddrInInitarray(uintptr_t addr) const {
-    CHECK(init_array_addr_ != 0);
+    CHECK(init_array_addr_ != 0) << SOLD_LOG_KEY(filename_);
     LOG(INFO) << SOLD_LOG_BITS(addr) << SOLD_LOG_BITS(init_array_addr_) << SOLD_LOG_BITS(init_arraysz_);
     return reinterpret_cast<uintptr_t>(init_array_addr_) <= addr && addr < reinterpret_cast<uintptr_t>(init_array_addr_ + init_arraysz_);
 }
@@ -246,7 +246,8 @@ std::pair<std::string, std::string> ELFBinary::GetVersion(int index, const std::
                         if (found != filename_to_soname.end()) {
                             return std::make_pair(found->second, std::string(strtab_ + vna->vna_name));
                         } else {
-                            LOG(FATAL) << "There is no entry for " << filename << " in filename_to_soname.";
+                            std::string s = ShowStdMap(filename_to_soname);
+                            LOG(FATAL) << "There is no entry for " << filename << " in filename_to_soname=" << s << ".";
                         }
                     }
 
