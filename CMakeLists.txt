@@ -72,9 +72,9 @@ target_link_libraries(print_ehframe sold_lib glog)
 
 add_subdirectory(tests)
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/feature_unit_tests DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+add_custom_target(feature_unit_tests ALL COMMAND "rsync" "-au" "${CMAKE_CURRENT_SOURCE_DIR}/feature_unit_tests" "${CMAKE_CURRENT_BINARY_DIR}")
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/renamer_test DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+add_custom_target(renamer_test ALL COMMAND "rsync" "-au" "${CMAKE_CURRENT_SOURCE_DIR}/renamer_test" "${CMAKE_CURRENT_BINARY_DIR}")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/CTestCustom.cmake ${CMAKE_CURRENT_BINARY_DIR})
 include(CTest)
