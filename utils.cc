@@ -52,6 +52,11 @@
 #include "utils.h"
 #include <iomanip>
 
+// Ubuntu 18.04 doesn't have DT_SYMTAB_SHNDX definition.
+#ifndef DT_SYMTAB_SHNDX
+#define DT_SYMTAB_SHNDX 34
+#endif
+
 std::vector<std::string> SplitString(const std::string& str, const std::string& sep) {
     std::vector<std::string> ret;
     if (str.empty()) return ret;
@@ -256,8 +261,6 @@ std::string ShowDynamicEntryType(int type) {
             return "DT_PREINIT_ARRAYSZ";
         case DT_SYMTAB_SHNDX:
             return "DT_SYMTAB_SHNDX";
-        case DT_NUM:
-            return "DT_NUM";
         case DT_LOOS:
             return "DT_LOOS";
         case DT_HIOS:
